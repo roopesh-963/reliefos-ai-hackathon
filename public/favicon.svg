@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ReliefOS AI">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#08111f" />
+      <stop offset="100%" stop-color="#132b44" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7ae0ff" />
+      <stop offset="100%" stop-color="#ff7a36" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#bg)" />
+  <path
+    d="M32 10 47 16v12c0 10.9-6.4 20.9-15 24-8.6-3.1-15-13.1-15-24V16z"
+    fill="none"
+    stroke="url(#accent)"
+    stroke-width="4"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M32 20v18M23 29h18"
+    stroke="#eafcff"
+    stroke-width="4"
+    stroke-linecap="round"
+  />
+</svg>
