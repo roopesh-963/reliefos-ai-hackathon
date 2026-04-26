@@ -3,11 +3,29 @@
   "buildCommand": "npm run build",
   "routes": [
     {
+      "src": "/api/(.*)",
+      "dest": "/_/backend/api/$1"
+    },
+    {
+      "src": "/api",
+      "dest": "/_/backend/api"
+    },
+    {
       "handle": "filesystem"
     },
     {
       "src": "/.*",
       "dest": "/index.html"
     }
-  ]
+  ],
+  "experimentalServices": {
+    "frontend": {
+      "routePrefix": "/",
+      "framework": "vite"
+    },
+    "backend": {
+      "entrypoint": "backend",
+      "routePrefix": "/_/backend"
+    }
+  }
 }
