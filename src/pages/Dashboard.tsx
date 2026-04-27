@@ -3,17 +3,18 @@ import {
   BarChart3,
   Bell,
   BrainCircuit,
+  Globe2,
   CheckCircle2,
   ChevronDown,
   LifeBuoy,
   LoaderCircle,
   LogOut,
   MapPinned,
-  Shield,
   UserCircle2,
 } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
+import { BrandLogo } from '../components/BrandLogo';
 import { CinematicDashboardBackdrop } from '../components/dashboard/CinematicDashboardBackdrop';
 import { ExplainableOperationsStack } from '../components/ai/ExplainableOperationsStack';
 import { useNotifications } from '../hooks/useNotifications';
@@ -21,21 +22,46 @@ import { cn } from '../lib/utils';
 import { getCurrentUser, logout } from '../services/api';
 import { getAssistantContext, type AssistantContextSnapshot } from '../services/assistant';
 
-const navigationItems = [
-  { label: 'Dashboard', path: '/dashboard' },
-  { label: 'Crisis Map', path: '/crisis-map' },
-  { label: 'Resources', path: '/resources' },
-  { label: 'SOS Citizen App', path: '/sos-citizen' },
-  { label: 'Analytics', path: '/analytics' },
-  { label: 'Supply Chain', path: '/supply-chain' },
-  { label: 'AI Assistant', path: '/ai-assistant' },
-] as const;
+type UserRole = 'citizen' | 'rescue_team' | 'admin';
 
-const commandActions = [
+type NavigationItem = {
+  label: string;
+  path: string;
+  roles?: readonly UserRole[];
+};
+
+type CommandAction = {
+  label: string;
+  path: string;
+  icon: typeof MapPinned;
+  roles?: readonly UserRole[];
+};
+
+const navigationItems: NavigationItem[] = [
+  { label: 'Dashboard', path: '/dashboard' },
+  { label: 'Global Crisis', path: '/global-crisis' },
+  { label: 'Crisis Map', path: '/crisis-map' },
+  { label: 'Resources', path: '/resources', roles: ['admin', 'rescue_team'] },
+  { label: 'SOS Citizen App', path: '/sos-citizen' },
+  { label: 'Analytics', path: '/analytics', roles: ['admin', 'rescue_team'] },
+  { label: 'Supply Chain', path: '/supply-chain', roles: ['admin', 'rescue_team'] },
+  { label: 'AI Assistant', path: '/ai-assistant', roles: ['admin', 'rescue_team'] },
+];
+
+const commandActions: CommandAction[] = [
   { label: 'Open Crisis Map', path: '/crisis-map', icon: MapPinned },
-  { label: 'View Analytics', path: '/analytics', icon: BarChart3 },
+  { label: 'Global Intel', path: '/global-crisis', icon: Globe2 },
+  { label: 'View Analytics', path: '/analytics', icon: BarChart3, roles: ['admin', 'rescue_team'] },
   { label: 'Launch SOS', path: '/sos-citizen', icon: LifeBuoy },
-] as const;
+];
+
+function isRoleAllowed(role: UserRole, allowedRoles?: readonly UserRole[]) {
+  if (!allowedRoles || allowedRoles.length === 0) {
+    return true;
+  }
+
+  return allowedRoles.includes(role);
+}
 
 const demoCriticalZones: AssistantContextSnapshot['criticalZones'] = [
   { name: 'North Arc Shelter Belt', score: 96 },
@@ -332,8 +358,11 @@ export default function Dashboard() {
   const [contextError, setContextError] = useState<string | null>(null);
   const [heroCollapsed, setHeroCollapsed] = useState(false);
   const user = getCurrentUser();
+  const userRole: UserRole = user?.role || 'citizen';
   const { notifications, removeNotification } = useNotifications();
   const sessionId = `dashboard-${user?.id || user?.email || 'operator'}`;
+  const accessibleNavigationItems = navigationItems.filter((item) => isRoleAllowed(userRole, item.roles));
+  const accessibleCommandActions = commandActions.filter((action) => isRoleAllowed(userRole, action.roles));
 
   const handleProfileNavigate = () => {
     setProfileMenuOpen(false);
@@ -442,11 +471,8 @@ export default function Dashboard() {
                       onClick={() => navigate('/')}
                       className="inline-flex items-center gap-3 px-1 py-2 text-left transition opacity-90 hover:opacity-100"
                     >
-                      <span className="flex h-11 w-11 items-center justify-center rounded-2xl text-cyan-100">
-                        <Shield className="h-5 w-5" />
-                      </span>
                       <span>
-                        <span className="block font-display text-lg font-semibold tracking-tight text-white">ReliefOS AI</span>
+                        <BrandLogo className="h-10 w-auto sm:h-11" />
                         <span className="block text-[10px] uppercase tracking-[0.34em] text-cyan-100/45">Command</span>
                       </span>
                     </button>
@@ -550,7 +576,7 @@ export default function Dashboard() {
                   </div>
 
                   <nav className="no-scrollbar flex min-w-0 items-center gap-2 overflow-x-auto xl:flex-1 xl:justify-center">
-                    {navigationItems.map((item) => (
+                    {accessibleNavigationItems.map((item) => (
                       <NavLink
                         key={item.path}
                         to={item.path}
@@ -903,7 +929,7 @@ export default function Dashboard() {
                         </div>
 
                         <div className="flex flex-wrap gap-3 pt-2">
-                          {commandActions.map((action, index) => (
+                          {accessibleCommandActions.map((action, index) => (
                             <button
                               key={action.path}
                               type="button"

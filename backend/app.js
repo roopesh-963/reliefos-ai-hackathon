@@ -1,4 +1,5 @@
-require('dotenv').config();
+const { loadEnv } = require('./config/env');
+loadEnv();
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
@@ -13,6 +14,7 @@ const supplyRoutes = require('./routes/supply.routes');
 const aiRoutes = require('./routes/ai.routes');
 const assistantRoutes = require('./routes/assistant.routes');
 const intelRoutes = require('./routes/intel.routes');
+const globalIntelRoutes = require('./routes/global-intel.routes');
 
 const noOpIo = {
   emit() {},
@@ -103,6 +105,7 @@ app.use('/api/supply', supplyRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/assistant', assistantRoutes);
 app.use('/api/intel', intelRoutes);
+app.use('/api/global-intel', globalIntelRoutes);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', message: 'ReliefOS API is running.' });
@@ -113,4 +116,4 @@ app.use((error, _req, res, _next) => {
   res.status(500).json({ message: 'Server error' });
 });
 
-module.exports = { app, ensureBackendReady, allowedOrigins };
+module.exports = { app, ensureBackendReady, allowedOrigins, corsOptions };

@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Bot,
   Brain,
+  CircleEllipsis,
+  Globe2,
   Loader2,
   MessageSquareCode,
   Mic,
@@ -17,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { BrandLogo } from '../BrandLogo';
 import { cn } from '../../lib/utils';
 import {
   AssistantAction,
@@ -43,11 +46,22 @@ interface CopilotMessage extends ChatMessage {
   actions?: AssistantAction[];
 }
 
+const normalizeCopilotMessage = (input: Partial<CopilotMessage> | null | undefined): CopilotMessage => ({
+  role: input?.role === 'user' ? 'user' : 'assistant',
+  text: String(input?.text || ''),
+  actions: Array.isArray(input?.actions) ? input.actions : undefined,
+});
+
+const normalizeCopilotMessages = (inputs: Array<Partial<CopilotMessage> | null | undefined>) =>
+  inputs.map((item) => normalizeCopilotMessage(item));
+
 const MODE_OPTIONS = [
+  { id: 'general', label: 'General', icon: CircleEllipsis },
   { id: 'citizen', label: 'Citizen', icon: Waves },
   { id: 'admin', label: 'Admin', icon: Brain },
   { id: 'logistics', label: 'Logistics', icon: Truck },
   { id: 'analytics', label: 'Analytics', icon: Warehouse },
+  { id: 'global', label: 'Global', icon: Globe2 },
 ] as const;
 
 const defaultContext: AssistantContextSnapshot = {
@@ -75,6 +89,7 @@ const blobDownload = (content: string, filename: string, type = 'text/plain;char
 };
 
 const resolvePage = (pathname: string) => {
+  if (pathname.startsWith('/global-crisis') || pathname.startsWith('/global')) return 'global';
   if (pathname.startsWith('/resources')) return 'resources';
   if (pathname.startsWith('/supply-chain') || pathname.startsWith('/supply')) return 'supply';
   if (pathname.startsWith('/analytics')) return 'analytics';
@@ -86,6 +101,8 @@ const resolvePage = (pathname: string) => {
 };
 
 const deriveMode = (page: string, role: string) => {
+  if (page === 'global') return 'global';
+  if (page === 'assistant') return 'general';
   if (page === 'resources' || page === 'supply') return 'logistics';
   if (page === 'analytics') return 'analytics';
   if (page === 'sos') return 'citizen';
@@ -107,6 +124,58 @@ const getSessionId = () => {
 const getPromptList = (suggestedPrompts: string[], contextPrompts: string[]) =>
   Array.from(new Set([...(suggestedPrompts || []), ...(contextPrompts || [])])).filter(Boolean);
 
+const inlineFormat = (text: string) => {
+  const tokens = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
+  return tokens.map((token, index) =>
+    token.startsWith('**') && token.endsWith('**') ? (
+      <strong key={`${token}-${index}`} className="font-semibold text-white">
+        {token.slice(2, -2)}
+      </strong>
+    ) : (
+      <React.Fragment key={`${token}-${index}`}>{token}</React.Fragment>
+    )
+  );
+};
+
+const renderMessageBody = (text: string) => {
+  const blocks = text
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  return blocks.map((block, blockIndex) => {
+    const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
+    const bulletLines = lines.filter((line) => /^[-*]\s+/.test(line));
+    const numberedLines = lines.filter((line) => /^\d+\.\s+/.test(line));
+
+    if (bulletLines.length === lines.length) {
+      return (
+        <ul key={`block-${blockIndex}`} className="ml-5 list-disc space-y-1 text-inherit">
+          {bulletLines.map((line, lineIndex) => (
+            <li key={`${line}-${lineIndex}`}>{inlineFormat(line.replace(/^[-*]\s+/, ''))}</li>
+          ))}
+        </ul>
+      );
+    }
+
+    if (numberedLines.length === lines.length) {
+      return (
+        <ol key={`block-${blockIndex}`} className="ml-5 list-decimal space-y-1 text-inherit">
+          {numberedLines.map((line, lineIndex) => (
+            <li key={`${line}-${lineIndex}`}>{inlineFormat(line.replace(/^\d+\.\s+/, ''))}</li>
+          ))}
+        </ol>
+      );
+    }
+
+    return (
+      <p key={`block-${blockIndex}`} className="whitespace-pre-wrap">
+        {inlineFormat(block)}
+      </p>
+    );
+  });
+};
+
 export function OperationsCopilot({ embedded = false }: OperationsCopilotProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -114,6 +183,7 @@ export function OperationsCopilot({ embedded = false }: OperationsCopilotProps) 
   const currentUser = getCurrentUser();
   const role = currentUser?.role || 'guest';
   const page = resolvePage(location.pathname);
+  const isPureGeneralAssistantPage = page === 'assistant';
   const [mode, setMode] = useState<string>(deriveMode(page, role));
   const [isOpen, setIsOpen] = useState(embedded);
   const [messages, setMessages] = useState<CopilotMessage[]>([]);
@@ -128,10 +198,15 @@ export function OperationsCopilot({ embedded = false }: OperationsCopilotProps) 
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
 
   useEffect(() => {
+    if (isPureGeneralAssistantPage) {
+      setMode('general');
+      return;
+    }
+
     if (!embedded) {
       setMode((current) => current || deriveMode(page, role));
     }
-  }, [embedded, page, role]);
+  }, [embedded, isPureGeneralAssistantPage, page, role]);
 
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -164,7 +239,7 @@ export function OperationsCopilot({ embedded = false }: OperationsCopilotProps) 
         .map((message, index) => ({
           id: `${message.role}-${index}`,
           role: message.role,
-          preview: message.text.replace(/\s+/g, ' ').trim(),
+          preview: String(message.text || '').replace(/\s+/g, ' ').trim(),
           index,
         }))
         .filter((entry) => entry.preview.length > 0)
@@ -189,11 +264,11 @@ export function OperationsCopilot({ embedded = false }: OperationsCopilotProps) 
       setSuggestedPrompts(data.context.suggestedPrompts || []);
       setMessages(
         data.history.length > 0
-          ? data.history
+          ? normalizeCopilotMessages(data.history)
           : [
               {
                 role: 'assistant',
-                text: 'ReliefOS Operations Copilot is online. Ask for live incident summaries, shelter guidance, inventory pressure, convoy actions, or analytics interpretation.',
+                text: 'ReliefOS AI is online. Ask anything. I can answer general questions, and I can also use live ReliefOS context for incidents, shelters, logistics, inventory, and analytics.',
               },
             ]
       );
@@ -217,12 +292,14 @@ export function OperationsCopilot({ embedded = false }: OperationsCopilotProps) 
   }, [embedded, isOpen, mode, page, geo.lat, geo.lng]);
 
   const panelTitle = useMemo(() => {
+    if (page === 'global') return 'Global Crisis Copilot';
+    if (page === 'assistant') return 'General AI Copilot';
     if (page === 'resources') return 'Inventory Copilot';
     if (page === 'supply') return 'Logistics Copilot';
     if (page === 'analytics') return 'Analytics Copilot';
     if (page === 'sos') return 'Citizen Copilot';
     return 'Operations Copilot';
-  }, [page]);
+  }, [mode, page]);
 
   const executeAction = async (action: AssistantAction) => {
     if (action.confirmation && !window.confirm(action.confirmation)) {
@@ -309,7 +386,7 @@ export function OperationsCopilot({ embedded = false }: OperationsCopilotProps) 
     const nextText = text.trim();
     if (!nextText || isThinking) return;
 
-    const userMessage: CopilotMessage = { role: 'user', text: nextText };
+    const userMessage: CopilotMessage = normalizeCopilotMessage({ role: 'user', text: nextText });
     const nextMessages = [...messages, userMessage];
     setMessages(nextMessages);
     setInput('');
@@ -331,11 +408,11 @@ export function OperationsCopilot({ embedded = false }: OperationsCopilotProps) 
 
       setMessages((current) => [
         ...current,
-        {
+        normalizeCopilotMessage({
           role: 'assistant',
           text: response.reply,
           actions: response.actions,
-        },
+        }),
       ]);
       setContext(response.context);
       setSuggestedPrompts(response.suggestedPrompts || []);
@@ -357,10 +434,10 @@ export function OperationsCopilot({ embedded = false }: OperationsCopilotProps) 
     try {
       await clearAssistantHistory({ sessionId: sessionIdRef.current });
       setMessages([
-        {
+        normalizeCopilotMessage({
           role: 'assistant',
           text: 'Conversation history cleared. The copilot context is still live and ready for a fresh command.',
-        },
+        }),
       ]);
       addNotification({
         type: 'info',
@@ -393,10 +470,7 @@ export function OperationsCopilot({ embedded = false }: OperationsCopilotProps) 
             )}
           >
             <div className="border-b border-white/10 px-4 py-4">
-              <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                <Sparkles className="h-4 w-4 text-cyan-200" />
-                ReliefOS AI
-              </div>
+              <BrandLogo className="h-9 w-auto" />
               <div className="mt-1 text-xs uppercase tracking-[0.24em] text-white/38">{panelTitle}</div>
               <button
                 type="button"
@@ -467,24 +541,30 @@ export function OperationsCopilot({ embedded = false }: OperationsCopilotProps) 
             </div>
 
             <div className="border-b border-white/10 px-4 py-3">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {MODE_OPTIONS.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => setMode(option.id)}
-                    className={cn(
-                      'inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition',
-                      mode === option.id
-                        ? 'border-cyan-300/25 bg-cyan-500/15 text-cyan-50'
-                        : 'border-white/10 bg-white/5 text-gray-300 hover:border-cyan-300/20'
-                    )}
-                  >
-                    <option.icon className="h-3.5 w-3.5" />
-                    {option.label}
-                  </button>
-                ))}
-              </div>
+              {isPureGeneralAssistantPage ? (
+                <div className="rounded-2xl border border-cyan-300/20 bg-cyan-500/10 px-3 py-3 text-sm text-cyan-50">
+                  General mode is locked on this page. Chat replies come directly from Gemini.
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {MODE_OPTIONS.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setMode(option.id)}
+                      className={cn(
+                        'inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition',
+                        mode === option.id
+                          ? 'border-cyan-300/25 bg-cyan-500/15 text-cyan-50'
+                          : 'border-white/10 bg-white/5 text-gray-300 hover:border-cyan-300/20'
+                      )}
+                    >
+                      <option.icon className="h-3.5 w-3.5" />
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
@@ -520,7 +600,7 @@ export function OperationsCopilot({ embedded = false }: OperationsCopilotProps) 
                                 : 'border-cyan-300/20 bg-cyan-500/12 text-cyan-50'
                             )}
                           >
-                            {message.text}
+                            <div className="space-y-3">{renderMessageBody(message.text)}</div>
                             {message.actions && message.actions.length > 0 && (
                               <div className="mt-4 flex flex-wrap gap-2">
                                 {message.actions.map((action) => (
@@ -613,7 +693,7 @@ export function OperationsCopilot({ embedded = false }: OperationsCopilotProps) 
                         void handleSend();
                       }
                     }}
-                    placeholder="Message ReliefOS AI..."
+                    placeholder={mode === 'general' ? 'Ask anything...' : 'Message ReliefOS AI...'}
                     rows={1}
                     className="min-h-[52px] flex-1 resize-none bg-transparent px-2 py-3 text-sm text-white outline-none placeholder:text-gray-500"
                   />
@@ -660,24 +740,30 @@ export function OperationsCopilot({ embedded = false }: OperationsCopilotProps) 
           </div>
 
           <div className="border-b border-white/10 px-4 py-3">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {MODE_OPTIONS.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => setMode(option.id)}
-                  className={cn(
-                    'inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition',
-                    mode === option.id
-                      ? 'border-cyan-300/25 bg-cyan-500/15 text-cyan-50'
-                      : 'border-white/10 bg-white/5 text-gray-300 hover:border-cyan-300/20'
-                  )}
-                >
-                  <option.icon className="h-3.5 w-3.5" />
-                  {option.label}
-                </button>
-              ))}
-            </div>
+            {isPureGeneralAssistantPage ? (
+              <div className="rounded-2xl border border-cyan-300/20 bg-cyan-500/10 px-3 py-3 text-sm text-cyan-50">
+                General mode is locked on this page. Chat replies come directly from Gemini.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {MODE_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setMode(option.id)}
+                    className={cn(
+                      'inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition',
+                      mode === option.id
+                        ? 'border-cyan-300/25 bg-cyan-500/15 text-cyan-50'
+                        : 'border-white/10 bg-white/5 text-gray-300 hover:border-cyan-300/20'
+                    )}
+                  >
+                    <option.icon className="h-3.5 w-3.5" />
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -708,7 +794,7 @@ export function OperationsCopilot({ embedded = false }: OperationsCopilotProps) 
                           : 'border-cyan-300/20 bg-cyan-500/15 text-cyan-50'
                       )}
                     >
-                      {message.text}
+                      <div className="space-y-3">{renderMessageBody(message.text)}</div>
                       {message.actions && message.actions.length > 0 && (
                         <div className="mt-3 flex flex-wrap gap-2">
                           {message.actions.map((action) => (
@@ -795,7 +881,7 @@ export function OperationsCopilot({ embedded = false }: OperationsCopilotProps) 
                     void handleSend();
                   }
                 }}
-                placeholder="Ask about incidents, supplies, shelters, routes, or analytics..."
+                placeholder={mode === 'general' ? 'Ask anything...' : 'Ask about incidents, supplies, shelters, routes, or analytics...'}
                 rows={1}
                 className="min-h-[48px] flex-1 resize-none bg-transparent px-2 py-3 text-sm text-white outline-none placeholder:text-gray-500"
               />

@@ -1,4 +1,5 @@
 import OperationsCopilot from '../components/assistant/OperationsCopilot';
+import { BrandLogo } from '../components/BrandLogo';
 import { BackToDashboardButton } from '../components/navigation/BackToDashboardButton';
 
 export default function AIAssistant() {
@@ -12,7 +13,7 @@ export default function AIAssistant() {
         <div className="flex items-center justify-between gap-4">
           <BackToDashboardButton />
           <div className="hidden text-right md:block">
-            <div className="text-[10px] uppercase tracking-[0.28em] text-white/38">ReliefOS AI</div>
+            <BrandLogo className="ml-auto h-8 w-auto" />
             <div className="mt-1 text-sm text-white/70">Operations Copilot</div>
           </div>
         </div>

@@ -17,6 +17,7 @@ const SOSApp = lazy(() => import('./pages/SOSApp'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const SupplyChain = lazy(() => import('./pages/SupplyChain'));
 const AIAssistant = lazy(() => import('./pages/AIAssistant'));
+const GlobalCrisisDashboard = lazy(() => import('./pages/GlobalCrisisDashboard'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const OperationsCopilot = lazy(() => import('./components/assistant/OperationsCopilot'));
@@ -40,6 +41,7 @@ export default function App() {
               <Route path="/landing" element={<Landing />} />
 
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/global-crisis" element={<ProtectedRoute><GlobalCrisisDashboard /></ProtectedRoute>} />
               <Route path="/crisis-map" element={<CrisisMap />} />
               <Route path="/resources" element={<ProtectedRoute allowedRoles={['admin', 'rescue_team']}><Resources /></ProtectedRoute>} />
               <Route path="/sos-citizen" element={<ProtectedRoute><SOSApp /></ProtectedRoute>} />
@@ -53,6 +55,7 @@ export default function App() {
               <Route path="/sos" element={<Navigate to="/sos-citizen" replace />} />
               <Route path="/supply" element={<Navigate to="/supply-chain" replace />} />
               <Route path="/assistant" element={<Navigate to="/ai-assistant" replace />} />
+              <Route path="/global" element={<Navigate to="/global-crisis" replace />} />
 
               {/* Catch-all */}
               <Route path="*" element={<Navigate to="/" replace />} />

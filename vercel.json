@@ -1,17 +1,29 @@
 {
-  "installCommand": "npm install && npm --prefix backend install",
-  "buildCommand": "npm run build",
-  "routes": [
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "experimentalServices": {
+    "web": {
+      "entrypoint": ".",
+      "routePrefix": "/",
+      "framework": "vite"
+    },
+    "backend": {
+      "entrypoint": "backend",
+      "routePrefix": "/backend",
+      "framework": "express"
+    }
+  },
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/[...path].js"
+      "source": "/api/:path*",
+      "destination": "/backend/api/:path*"
     },
     {
-      "handle": "filesystem"
+      "source": "/",
+      "destination": "/index.html"
     },
     {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/:path((?!api/|backend/).*)",
+      "destination": "/index.html"
     }
   ]
 }

@@ -7,7 +7,9 @@ import { generateCityReport, CityReport } from '../services/geminiService';
 import {
   CrisisMarker,
   CrisisOverview,
+  GlobalCrisisOverview,
   fetchCrisisOverview,
+  fetchGlobalCrisisOverview,
   fetchIntelSourceStatus,
   IntelSourceStatus,
 } from '../services/api';
@@ -17,6 +19,7 @@ export default function CrisisMap() {
   const [feedMode, setFeedMode] = useState<'all' | 'critical'>('all');
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [overview, setOverview] = useState<CrisisOverview | null>(null);
+  const [globalOverview, setGlobalOverview] = useState<GlobalCrisisOverview | null>(null);
   const [sourceStatus, setSourceStatus] = useState<IntelSourceStatus | null>(null);
   const [report, setReport] = useState<CityReport | null>(null);
   const [loadingReport, setLoadingReport] = useState(false);
@@ -31,9 +34,10 @@ export default function CrisisMap() {
       try {
         setLoadingOverview(true);
 
-        const [overviewData, sourceData] = await Promise.all([
+        const [overviewData, sourceData, globalData] = await Promise.all([
           fetchCrisisOverview(),
           fetchIntelSourceStatus(),
+          fetchGlobalCrisisOverview().catch(() => null),
         ]);
 
         if (!isMounted) {
@@ -42,6 +46,7 @@ export default function CrisisMap() {
 
         setOverview(overviewData);
         setSourceStatus(sourceData);
+        setGlobalOverview(globalData);
 
         if (
           previousCriticalCount.current !== null &&
@@ -149,6 +154,7 @@ export default function CrisisMap() {
       <LiveEarthquakeMonitoringPanel
         title="Crisis Map Live Monitoring"
         overview={overview}
+        globalOverview={globalOverview}
         loadingOverview={loadingOverview}
         markers={visibleMarkers}
         selectedMarkerId={selectedMarkerId}

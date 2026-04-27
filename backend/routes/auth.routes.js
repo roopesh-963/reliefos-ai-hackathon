@@ -11,12 +11,13 @@
 
 const express = require('express');
 const router  = express.Router();
-const { register, login, getMe, updateMe } = require('../controllers/auth.controller');
+const { register, login, forgotPassword, getMe, updateMe } = require('../controllers/auth.controller');
 const { protect } = require('../middleware/auth.middleware');
 
 // Public routes — no token needed
 router.post('/register', register);
 router.post('/login',    login);
+router.post('/forgot-password', forgotPassword);
 
 // Protected route — requires valid JWT
 router.get('/me', protect, getMe);

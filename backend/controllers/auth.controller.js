@@ -16,13 +16,14 @@
 
 const jwt = require('jsonwebtoken');
 const User = require('../models/User.model');
+const { getRequiredEnv } = require('../config/env');
 const VALID_ROLES = new Set(['citizen', 'rescue_team', 'admin']);
 
 // Helper: generate a signed JWT
 const generateToken = (id, role) => {
   return jwt.sign(
     { id, role },
-    process.env.JWT_SECRET,
+    getRequiredEnv('JWT_SECRET'),
     { expiresIn: '7d' } // Token lasts 7 days
   );
 };
@@ -111,6 +112,34 @@ const login = async (req, res) => {
   }
 };
 
+const forgotPassword = async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const newPassword = String(req.body?.newPassword || '');
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'No user found for that email address' });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    return res.json({ message: 'Password reset successful. You can now sign in with your new password.' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    return res.status(500).json({ message: 'Server error while resetting password' });
+  }
+};
+
 // ── GET /api/auth/me ──────────────────────────────────────────────────────────
 // Returns the current logged-in user's profile (requires valid JWT)
 const getMe = async (req, res) => {
@@ -175,4 +204,4 @@ const updateMe = async (req, res) => {
   }
 };
 
-module.exports = { register, login, getMe, updateMe };
+module.exports = { register, login, forgotPassword, getMe, updateMe };

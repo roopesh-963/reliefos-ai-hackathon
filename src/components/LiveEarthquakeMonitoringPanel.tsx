@@ -3,11 +3,13 @@ import {
   Activity,
   AlertTriangle,
   ArrowUpRight,
+  BadgeDollarSign,
   Globe2,
   Loader2,
   Map,
   MapPin,
   Radio,
+  ShieldAlert,
   Sparkles,
   Waves,
 } from 'lucide-react';
@@ -16,6 +18,8 @@ import { TacticalMap, TacticalMarker } from './TacticalMap';
 import {
   CrisisMarker,
   CrisisOverview,
+  GlobalCrisisCard,
+  GlobalCrisisOverview,
   IntelSourceStatus,
   LocationIntelReport,
 } from '../services/api';
@@ -27,6 +31,7 @@ const SeismicGlobe = lazy(() =>
 interface LiveEarthquakeMonitoringPanelProps {
   title?: string;
   overview: CrisisOverview | null;
+  globalOverview?: GlobalCrisisOverview | null;
   loadingOverview: boolean;
   markers: CrisisMarker[];
   selectedMarkerId: string | null;
@@ -116,16 +121,16 @@ const summaryTone = (label: string) => {
 export function LiveEarthquakeMonitoringPanel({
   title = 'Crisis Map Live Monitoring',
   overview,
+  globalOverview,
   loadingOverview,
   markers,
   selectedMarkerId,
   onMarkerSelect,
   report,
   loadingReport,
-  sourceStatus,
   mapOverlayControls,
 }: LiveEarthquakeMonitoringPanelProps) {
-  const [viewMode, setViewMode] = useState<'globe' | 'map'>('map');
+  const [viewMode, setViewMode] = useState<'globe' | 'map'>('globe');
   const [showFaultLines, setShowFaultLines] = useState(true);
   const [speed, setSpeed] = useState(55);
 
@@ -206,6 +211,16 @@ export function LiveEarthquakeMonitoringPanel({
 
   const featureHeadline = overview?.headlines?.[0];
   const additionalHeadlines = overview?.headlines?.slice(1, 6) || [];
+  const crossCrisisCards = useMemo(
+    () =>
+      (globalOverview?.cards || []).filter(
+        (card) => card.type === 'financial_crisis' || card.type === 'war_conflict'
+      ),
+    [globalOverview]
+  );
+
+  const crisisLaneIcon = (cardType: GlobalCrisisCard['type']) =>
+    cardType === 'financial_crisis' ? BadgeDollarSign : ShieldAlert;
 
   return (
     <div className="relief-page text-white">
@@ -353,79 +368,133 @@ export function LiveEarthquakeMonitoringPanel({
                   )}
                 </div>
               </section>
+
             </aside>
 
-            <div className="relief-panel relative min-h-[560px] overflow-hidden rounded-[1.6rem]">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_12%_0%,rgba(91,155,255,0.1),transparent_24%),radial-gradient(circle_at_88%_12%,rgba(67,224,255,0.08),transparent_18%)]" />
-              <div className="absolute inset-x-0 top-0 z-[450] flex items-center justify-between px-4 py-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  {(['map', 'globe'] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setViewMode(mode)}
-                      className={cn(
-                        'relief-chip inline-flex h-9 items-center gap-2 rounded-full px-3 text-[13px] font-medium transition',
-                        viewMode === mode ? 'text-white' : 'text-white/65 hover:text-white'
-                      )}
-                    >
-                      {mode === 'map' ? <Map className="h-4 w-4" /> : <Globe2 className="h-4 w-4" />}
-                      {mode === 'map' ? 'Map' : 'Globe'}
-                    </button>
-                  ))}
+            <div className="flex min-h-[420px] flex-col gap-3">
+              <div className="relief-panel relative min-h-[560px] overflow-hidden rounded-[1.6rem]">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_12%_0%,rgba(91,155,255,0.1),transparent_24%),radial-gradient(circle_at_88%_12%,rgba(67,224,255,0.08),transparent_18%)]" />
+                <div className="absolute inset-x-0 top-0 z-[450] flex items-center justify-between px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    {(['map', 'globe'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setViewMode(mode)}
+                        className={cn(
+                          'relief-chip inline-flex h-9 items-center gap-2 rounded-full px-3 text-[13px] font-medium transition',
+                          viewMode === mode ? 'text-white' : 'text-white/65 hover:text-white'
+                        )}
+                      >
+                        {mode === 'map' ? <Map className="h-4 w-4" /> : <Globe2 className="h-4 w-4" />}
+                        {mode === 'map' ? 'Map' : 'Globe'}
+                      </button>
+                    ))}
 
-                  <div>
-                  <div className="text-[10px] uppercase tracking-[0.26em] text-white/42">
-                    {viewMode === 'map' ? 'Map Relay' : 'Globe Relay'}
-                  </div>
-                  <div className="mt-1 text-sm font-semibold text-white">
-                    {loadingOverview ? 'Syncing feed...' : `${overview?.summary.activeEarthquakes ?? feedMarkers.length} active events`}
-                  </div>
-                </div>
-                </div>
-
-                <div />
-              </div>
-
-              <div className="absolute inset-0 pt-[72px]">
-                {viewMode === 'map' ? (
-                  <TacticalMap
-                    markers={feedMarkers}
-                    selectedMarkerId={selectedMarkerId}
-                    onCityClick={handleMapSelect}
-                    showFaultLines={showFaultLines}
-                  />
-                ) : (
-                  <Suspense
-                    fallback={
-                      <div className="flex h-full items-center justify-center text-cyan-100/80">
-                        <div className="flex items-center gap-3 rounded-full border border-cyan-300/20 bg-cyan-500/10 px-4 py-2 text-xs uppercase tracking-[0.22em]">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Loading Globe
-                        </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-[0.26em] text-white/42">
+                        {viewMode === 'map' ? 'Map Relay' : 'Global Relay'}
                       </div>
-                    }
-                  >
-                    <SeismicGlobe
+                      <div className="mt-1 text-sm font-semibold text-white">
+                        {loadingOverview ? 'Syncing feed...' : `${overview?.summary.activeEarthquakes ?? feedMarkers.length} active events`}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div />
+                </div>
+
+                <div className="absolute inset-0 pt-[72px]">
+                  {viewMode === 'map' ? (
+                    <TacticalMap
                       markers={feedMarkers}
                       selectedMarkerId={selectedMarkerId}
-                      onMarkerSelect={onMarkerSelect}
-                      speed={speed}
+                      onCityClick={handleMapSelect}
+                      showFaultLines={showFaultLines}
                     />
-                  </Suspense>
+                  ) : (
+                    <Suspense
+                      fallback={
+                        <div className="flex h-full items-center justify-center text-cyan-100/80">
+                          <div className="flex items-center gap-3 rounded-full border border-cyan-300/20 bg-cyan-500/10 px-4 py-2 text-xs uppercase tracking-[0.22em]">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading Globe
+                          </div>
+                        </div>
+                      }
+                    >
+                      <SeismicGlobe
+                        markers={feedMarkers}
+                        selectedMarkerId={selectedMarkerId}
+                        onMarkerSelect={onMarkerSelect}
+                        speed={speed}
+                      />
+                    </Suspense>
+                  )}
+                </div>
+
+                {selectedEvent && (
+                  <div className="relief-card absolute bottom-4 left-4 z-[500] max-w-[290px] rounded-[1.1rem] px-3 py-2.5">
+                    <div className="text-[13px] font-semibold text-white">{selectedEvent.label}</div>
+                    <div className="mt-2 text-[13px] text-white/65">
+                      Magnitude {(selectedEvent.magnitude || 0).toFixed(1)} | Depth {Math.round(selectedEvent.depthKm || 0)} km
+                    </div>
+                  </div>
                 )}
+
+                {mapOverlayControls}
               </div>
 
-              {selectedEvent && (
-                <div className="relief-card absolute bottom-4 left-4 z-[500] max-w-[290px] rounded-[1.1rem] px-3 py-2.5">
-                  <div className="text-[13px] font-semibold text-white">{selectedEvent.label}</div>
-                  <div className="mt-2 text-[13px] text-white/65">
-                    Magnitude {(selectedEvent.magnitude || 0).toFixed(1)} | Depth {Math.round(selectedEvent.depthKm || 0)} km
+              <section className="relief-panel rounded-[1.4rem] p-3.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[11px] uppercase tracking-[0.28em] text-white/40">Map Details</div>
+                  <div className="text-xs text-white/50">
+                    {crossCrisisCards.length > 0 ? 'Cross-Crisis + War / Conflict' : 'Syncing'}
                   </div>
                 </div>
-              )}
 
-              {mapOverlayControls}
+                <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                  {crossCrisisCards.length === 0 ? (
+                    <div className="rounded-[1rem] border border-white/10 bg-white/[0.03] p-3 text-sm text-white/58 lg:col-span-2">
+                      Financial and war/conflict intelligence will appear here once the universal crisis feed finishes syncing.
+                    </div>
+                  ) : (
+                    crossCrisisCards.map((card) => {
+                      const LaneIcon = crisisLaneIcon(card.type);
+                      return (
+                        <div key={card.type} className="relief-card rounded-[1rem] p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-white/42">
+                                <LaneIcon className="h-3.5 w-3.5 text-cyan-100/76" />
+                                {card.label}
+                              </div>
+                              <div className="mt-2 text-sm font-semibold text-white">{card.executiveSummary}</div>
+                            </div>
+                            <span className={cn('rounded-full border px-2 py-1 text-[10px]', reportStatusTone(card.severity))}>
+                              {card.severity}
+                            </span>
+                          </div>
+                          <div className="mt-3 text-[13px] leading-6 text-white/66">{card.summary}</div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {card.metrics.slice(0, 2).map((metric) => (
+                              <div
+                                key={`${card.type}-${metric.label}`}
+                                className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] text-white/70"
+                              >
+                                <span className="text-white/42">{metric.label}:</span> {metric.value}
+                              </div>
+                            ))}
+                          </div>
+                          {card.topSignals[0] ? (
+                            <div className="mt-3 text-[12px] leading-5 text-cyan-100/58">{card.topSignals[0]}</div>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </section>
             </div>
 
             <aside className="flex min-h-[420px] flex-col gap-3">

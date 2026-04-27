@@ -6,11 +6,14 @@
  */
 
 const mongoose = require('mongoose');
+const { getRequiredEnv } = require('./env');
 
 const LOCAL_FALLBACK_URI = 'mongodb://127.0.0.1:27017/reliefos';
 
 const getCandidateUris = () => {
-  const configuredUri = process.env.MONGO_URI?.trim();
+  const configuredUri = process.env.NODE_ENV === 'production'
+    ? getRequiredEnv('MONGO_URI')
+    : process.env.MONGO_URI?.trim();
   const localUri = process.env.MONGO_URI_LOCAL?.trim() || LOCAL_FALLBACK_URI;
   const candidates = [];
 
@@ -53,7 +56,7 @@ const connectDB = async () => {
 
   if (lastError) {
     console.error('No MongoDB connection could be established.');
-    process.exit(1);
+    throw lastError;
   }
 };
 

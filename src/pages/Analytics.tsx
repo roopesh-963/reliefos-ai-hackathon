@@ -655,7 +655,7 @@ export default function Analytics() {
           <div className="max-w-4xl space-y-5">
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-cyan-100">
               <Signal className="w-3 h-3" />
-              ReliefOS AI Command Center
+              ReliefOS AI
             </div>
             <div>
               <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-white">Analytics Mission Control</h1>

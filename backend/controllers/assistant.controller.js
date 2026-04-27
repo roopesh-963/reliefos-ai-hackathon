@@ -5,10 +5,14 @@ const Resource = require('../models/Resource.model');
 const Supply = require('../models/Supply.model');
 const Alert = require('../models/Alert.model');
 const User = require('../models/User.model');
+const { buildGlobalOverview } = require('./globalIntel.controller');
 
-const AI_MODEL = process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
+const AI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 503]);
+const DEFAULT_MAX_RETRIES = 2;
+const DEFAULT_TIMEOUT_MS = 12000;
 
 const FALLBACK_SHELTERS = [
   { name: 'Zone C Shelter', lat: 26.9124, lng: 75.7873, kind: 'Shelter' },
@@ -16,6 +20,34 @@ const FALLBACK_SHELTERS = [
   { name: 'Hill Base Camp', lat: 30.3165, lng: 78.0322, kind: 'Camp' },
   { name: 'Sector 7 Clinic', lat: 22.5726, lng: 88.3639, kind: 'Clinic' },
 ];
+
+const GENERAL_MODE_CONTEXT = {
+  activeIncidents: 0,
+  criticalZones: [],
+  prioritizedIncidents: [],
+  avgResponseTimeMinutes: 0,
+  avgResponseTimeLabel: 'N/A',
+  lowStockResources: [],
+  activeAlerts: [],
+  supplySummary: {
+    activeShipments: 0,
+    delayedDeliveries: 0,
+    deliveredToday: 0,
+  },
+  delayedShipments: [],
+  activeShipments: [],
+  shortagePredictions: [],
+  dispatchRecommendations: [],
+  warehouses: [],
+  nearestShelters: [],
+  todayIncidentCount: 0,
+  lastWeekDailyAverage: 0,
+  priorWeekDailyAverage: 0,
+  totalUsers: 0,
+  rescueTeams: 0,
+  currentLocation: { lat: 20.5937, lng: 78.9629 },
+  globalOverview: undefined,
+};
 
 const SUPPLY_COORDS = {
   'Central Hub': { lat: 28.6139, lng: 77.209 },
@@ -39,6 +71,7 @@ const ROLE_MODES = {
 
 const normalizePage = (page = '') => {
   const next = String(page).toLowerCase();
+  if (next.includes('global')) return 'global';
   if (next.includes('resource')) return 'resources';
   if (next.includes('supply')) return 'supply';
   if (next.includes('analytic')) return 'analytics';
@@ -50,9 +83,14 @@ const normalizePage = (page = '') => {
 
 const normalizeMode = (mode = '', role = 'guest', page = 'dashboard') => {
   const next = String(mode).toLowerCase();
-  if (['citizen', 'admin', 'logistics', 'analytics'].includes(next)) {
+  if (['general', 'citizen', 'admin', 'logistics', 'analytics', 'global'].includes(next)) {
+    if (page === 'assistant') {
+      return 'general';
+    }
     return next;
   }
+  if (page === 'global') return 'admin';
+  if (page === 'assistant') return 'general';
   if (page === 'resources' || page === 'supply') return 'logistics';
   if (page === 'analytics') return 'analytics';
   return ROLE_MODES[role] || 'admin';
@@ -86,6 +124,68 @@ const formatMinutes = (value) => {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
   return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isRetryableError = (error) => error?.code === 'AI_TIMEOUT' || RETRYABLE_STATUS_CODES.has(Number(error?.status));
+
+const withTimeout = async (promise, timeoutMs, label) => {
+  let timer = null;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          const timeoutError = new Error(`${label} timed out after ${timeoutMs}ms`);
+          timeoutError.code = 'AI_TIMEOUT';
+          reject(timeoutError);
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+};
+
+const generateAssistantContentWithRetry = async (payload, label, options = {}) => {
+  if (!ai) {
+    const error = new Error('GEMINI_API_KEY is not configured');
+    error.code = 'AI_UNAVAILABLE';
+    throw error;
+  }
+
+  const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
+    try {
+      return await withTimeout(
+        ai.models.generateContent({
+          model: AI_MODEL,
+          ...payload,
+        }),
+        timeoutMs,
+        label
+      );
+    } catch (error) {
+      lastError = error;
+
+      if (!isRetryableError(error) || attempt === maxRetries) {
+        throw error;
+      }
+
+      const delayMs = attempt * 1000;
+      console.warn(`${label} failed with status ${error.status || error.code || 'unknown'}. Retrying in ${delayMs}ms.`);
+      await sleep(delayMs);
+    }
+  }
+
+  throw lastError;
 };
 
 const inferShipmentStatus = (shipment) => {
@@ -216,6 +316,14 @@ const buildShelterDirectory = (shipments, resources, sosList) => {
 
 const buildSuggestedPrompts = (page, mode) => {
   const prompts = {
+    general: [
+      'What are the most urgent issues right now?',
+      'Explain this situation in simple terms.',
+      'What should I do next?',
+      'Summarize today in 5 bullet points.',
+      'Compare the current risk picture across operations.',
+      'Answer my custom question directly.',
+    ],
     citizen: [
       'Where is the nearest shelter right now?',
       'Give me first aid guidance for burns.',
@@ -247,6 +355,14 @@ const buildSuggestedPrompts = (page, mode) => {
       'Which KPI changed most sharply today?',
       'What should I present to judges from this data?',
       'Which incident cluster is escalating fastest?',
+    ],
+    global: [
+      'What is the top global crisis right now?',
+      'Summarize war and financial crisis pressure.',
+      'What are the main prevention recommendations?',
+      'What control and response actions are needed first?',
+      'Compare health, food, and energy risks.',
+      'Answer my custom question from the current global crisis data.',
     ],
   };
 
@@ -290,8 +406,108 @@ const buildSuggestedPrompts = (page, mode) => {
       'Where should vulnerable people move immediately?',
     ];
   }
+  if (page === 'global') {
+    return [
+      'What is the top global crisis right now?',
+      'Summarize financial and food risks globally.',
+      'Which crisis lanes need executive attention first?',
+      'What prevention actions should leadership prioritize?',
+      'Compare war, health, and energy pressures.',
+      'Give me a cross-crisis executive briefing.',
+    ];
+  }
+  if (page === 'assistant') {
+    return prompts[mode] || prompts.general;
+  }
 
   return prompts[mode] || prompts.admin;
+};
+
+const buildGlobalAssistantContext = async ({ page, mode }) => {
+  const overview = await buildGlobalOverview();
+  const topCard = overview.cards[0] || null;
+
+  return {
+    page,
+    mode,
+    generatedAt: overview.updatedAt,
+    aiBriefing: {
+      headline: overview.executiveSummary.headline,
+      summary: overview.executiveSummary.summary,
+      topPriorityReason: topCard?.topSignals?.[0] || overview.executiveSummary.preventionFocus,
+      shortageHeadline: overview.executiveSummary.preventionFocus,
+      dispatchHeadline: overview.executiveSummary.responseFocus,
+    },
+    activeIncidents: overview.cards.filter((card) => card.severity !== 'Stable').length,
+    criticalZones: overview.cards.map((card) => ({
+      name: card.label,
+      score: card.score,
+    })),
+    prioritizedIncidents: overview.cards.map((card, index) => ({
+      id: `global-${card.type}`,
+      region: card.label,
+      severity: card.severity.toLowerCase(),
+      crisisType: card.type,
+      status: card.severity === 'Critical' ? 'escalating' : card.severity === 'Warning' ? 'watch' : 'stable',
+      assignedTeam: 'Global Monitoring Cell',
+      createdAt: overview.updatedAt,
+      label: card.executiveSummary,
+      ageMinutes: 0,
+      priorityScore: card.score,
+      priorityLabel: card.severity === 'Critical' ? 'Critical' : card.severity === 'Warning' ? 'High' : 'Watch',
+      recommendedAction: card.responseActions[0] || 'Maintain cross-sector monitoring.',
+      why: card.topSignals.slice(0, 3),
+    })),
+    avgResponseTimeMinutes: 0,
+    avgResponseTimeLabel: 'Global',
+    lowStockResources: [],
+    activeAlerts: [],
+    supplySummary: {
+      activeShipments: 0,
+      delayedDeliveries: 0,
+      deliveredToday: 0,
+    },
+    delayedShipments: [],
+    activeShipments: [],
+    shortagePredictions: overview.cards.map((card) => ({
+      id: `global-shortage-${card.type}`,
+      type: card.label,
+      name: `${card.label} prevention`,
+      location: 'Global',
+      currentQuantity: card.score,
+      unit: 'risk score',
+      daysRemaining: Number((Math.max(1, (100 - card.score) / 18)).toFixed(1)),
+      riskScore: card.score,
+      riskLevel: card.severity === 'Critical' ? 'Critical' : card.severity === 'Warning' ? 'High' : 'Stable',
+      recommendedAction: card.preventionRecommendations[0] || 'Maintain prevention monitoring.',
+      why: card.preventionRecommendations.slice(0, 2),
+    })),
+    dispatchRecommendations: overview.cards.map((card) => ({
+      id: `global-dispatch-${card.type}`,
+      incidentId: `global-${card.type}`,
+      to: card.label,
+      from: 'Executive Command',
+      resourceType: 'Coordination',
+      quantity: 1,
+      unit: 'priority package',
+      etaMinutes: 60,
+      action: card.responseActions[0] || 'Review response posture.',
+      existingShipmentId: null,
+      shipmentId: null,
+      priorityLabel: card.severity === 'Critical' ? 'Critical' : card.severity === 'Warning' ? 'High' : 'Watch',
+      why: card.responseActions.slice(0, 2),
+    })),
+    warehouses: [],
+    nearestShelters: [],
+    todayIncidentCount: overview.cards.filter((card) => card.severity === 'Critical').length,
+    lastWeekDailyAverage: 0,
+    priorWeekDailyAverage: 0,
+    totalUsers: 0,
+    rescueTeams: 0,
+    currentLocation: { lat: 20.5937, lng: 78.9629 },
+    suggestedPrompts: buildSuggestedPrompts(page, mode),
+    globalOverview: overview,
+  };
 };
 
 const SEVERITY_WEIGHT = {
@@ -559,10 +775,160 @@ const createAction = (type, label, payload = {}, confirmation = '') => ({
   confirmation,
 });
 
+const isGreetingMessage = (query = '') =>
+  /^(hi|hello|hey|yo|hola|namaste|good morning|good afternoon|good evening)\b/.test(query.trim());
+
+const RESOURCE_TOPIC_ALIASES = {
+  fuel: ['fuel', 'diesel', 'petrol', 'gas', 'generator', 'power'],
+  medicine: ['medicine', 'medical', 'medicines', 'drug', 'drugs', 'antibiotic', 'ambulance'],
+  water: ['water', 'drinking water'],
+  food: ['food', 'ration', 'meal', 'meals'],
+  equipment: ['equipment', 'gear', 'kit', 'kits', 'blanket', 'blankets'],
+};
+
+const inferResourceTopic = (query = '') =>
+  Object.entries(RESOURCE_TOPIC_ALIASES).find(([, aliases]) => aliases.some((alias) => query.includes(alias)))?.[0] || null;
+
+const toResourceLabel = (topic = '') => {
+  if (topic === 'medicine') return 'Medicine';
+  if (topic === 'water') return 'Water';
+  if (topic === 'food') return 'Food';
+  if (topic === 'fuel') return 'Fuel';
+  return 'Equipment';
+};
+
+const summarizeResourceTopic = (context, topic) => {
+  const label = toResourceLabel(topic);
+  const warehouseSnapshots = (context.warehouses || [])
+    .map((warehouse) => ({
+      name: warehouse.name,
+      units: Number(warehouse.totals?.[label] || 0),
+    }))
+    .filter((warehouse) => warehouse.units > 0)
+    .sort((a, b) => b.units - a.units);
+
+  const lowStockSignals = (context.lowStockResources || []).filter((resource) => {
+    const haystack = `${resource.name} ${resource.location}`.toLowerCase();
+    return haystack.includes(topic) || haystack.includes(label.toLowerCase());
+  });
+
+  const shortageSignals = (context.shortagePredictions || []).filter((item) => {
+    const haystack = `${item.type} ${item.name} ${item.location}`.toLowerCase();
+    return haystack.includes(topic) || haystack.includes(label.toLowerCase());
+  });
+
+  const shipmentSignals = (context.activeShipments || []).filter((shipment) => {
+    const haystack = `${shipment.resourceType} ${shipment.to} ${shipment.from}`.toLowerCase();
+    return haystack.includes(topic) || haystack.includes(label.toLowerCase());
+  });
+
+  return {
+    label,
+    topWarehouses: warehouseSnapshots.slice(0, 3),
+    lowStockSignals: lowStockSignals.slice(0, 3),
+    shortageSignals: shortageSignals.slice(0, 2),
+    shipmentSignals: shipmentSignals.slice(0, 3),
+    totalUnits: warehouseSnapshots.reduce((sum, warehouse) => sum + warehouse.units, 0),
+  };
+};
+
+const buildAssistantContextDigest = (context) => ({
+  page: context.page,
+  mode: context.mode,
+  generatedAt: context.generatedAt,
+  aiBriefing: context.aiBriefing,
+  activeIncidents: context.activeIncidents,
+  criticalZones: (context.criticalZones || []).slice(0, 5),
+  prioritizedIncidents: (context.prioritizedIncidents || []).slice(0, 5),
+  lowStockResources: (context.lowStockResources || []).slice(0, 6),
+  activeAlerts: (context.activeAlerts || []).slice(0, 6),
+  supplySummary: context.supplySummary,
+  delayedShipments: (context.delayedShipments || []).slice(0, 5),
+  activeShipments: (context.activeShipments || []).slice(0, 6),
+  shortagePredictions: (context.shortagePredictions || []).slice(0, 5),
+  dispatchRecommendations: (context.dispatchRecommendations || []).slice(0, 5),
+  warehouses: (context.warehouses || []).slice(0, 5),
+  nearestShelters: (context.nearestShelters || []).slice(0, 4),
+  todayIncidentCount: context.todayIncidentCount,
+  lastWeekDailyAverage: context.lastWeekDailyAverage,
+  priorWeekDailyAverage: context.priorWeekDailyAverage,
+  totalUsers: context.totalUsers,
+  rescueTeams: context.rescueTeams,
+  globalOverview: context.globalOverview
+    ? {
+        updatedAt: context.globalOverview.updatedAt,
+        executiveSummary: context.globalOverview.executiveSummary,
+        cards: (context.globalOverview.cards || []).slice(0, 5),
+      }
+    : undefined,
+});
+
 const composeRuleBasedReply = ({ message, mode, page, context }) => {
   const query = String(message || '').toLowerCase();
   const actions = [];
   const lines = [];
+  const globalCards = Array.isArray(context.globalOverview?.cards) ? context.globalOverview.cards : [];
+  const topGlobalCard = globalCards[0];
+  const resourceTopic = inferResourceTopic(query);
+
+  if (isGreetingMessage(query)) {
+    if (mode === 'general') {
+      return {
+        reply:
+          'Hi. I am ReliefOS AI. You can ask me anything, or switch into operations questions about incidents, shelters, logistics, inventory, and analytics whenever you want.',
+        actions,
+      };
+    }
+
+    return {
+      reply:
+        `Hi. ${mode === 'global' ? 'Global' : 'Operations'} copilot is online. Ask for a summary, recommendations, or any specific question and I will help from the current context.`,
+      actions,
+    };
+  }
+
+  if (
+    mode === 'global' ||
+    page === 'global' ||
+    query.includes('global') ||
+    query.includes('executive briefing') ||
+    query.includes('financial') ||
+    query.includes('war') ||
+    query.includes('food') ||
+    query.includes('health') ||
+    query.includes('energy') ||
+    query.includes('water')
+  ) {
+    if (topGlobalCard) {
+      lines.push(
+        `Global briefing: ${topGlobalCard.label} is the lead watch area at ${topGlobalCard.score}/100. ${topGlobalCard.executiveSummary}`
+      );
+
+      const mentionedCard =
+        globalCards.find((card) =>
+          [card.label, card.type.replaceAll('_', ' ')].some((value) => query.includes(String(value).toLowerCase()))
+        ) || topGlobalCard;
+
+      if (mentionedCard) {
+        lines.push(
+          `${mentionedCard.label} key signals include ${mentionedCard.topSignals.slice(0, 3).join(', ')}. Prevention priority: ${mentionedCard.preventionRecommendations[0] || 'maintain early warning'}. Response priority: ${mentionedCard.responseActions[0] || 'maintain executive coordination'}.`
+        );
+      }
+
+      if (
+        query.includes('solution') ||
+        query.includes('recommendation') ||
+        query.includes('prevent') ||
+        query.includes('response') ||
+        query.includes('control') ||
+        query.includes('action')
+      ) {
+        lines.push(
+          `Recommended actions: prevention should focus on ${mentionedCard?.preventionRecommendations?.slice(0, 2).join(', ') || topGlobalCard.preventionRecommendations.slice(0, 2).join(', ')}. Response should focus on ${mentionedCard?.responseActions?.slice(0, 2).join(', ') || topGlobalCard.responseActions.slice(0, 2).join(', ')}.`
+        );
+      }
+    }
+  }
 
   if (query.includes('nearest shelter')) {
     const nearest = context.nearestShelters.slice(0, 3);
@@ -622,6 +988,69 @@ const composeRuleBasedReply = ({ message, mode, page, context }) => {
       );
     } else {
       lines.push('Resource inventory is currently above low-stock thresholds.');
+    }
+  }
+
+  if (resourceTopic) {
+    const resourceSummary = summarizeResourceTopic(context, resourceTopic);
+
+    if (query.includes('cost') || query.includes('price')) {
+      lines.push(
+        `ReliefOS does not currently track live ${resourceTopic} market pricing or unit cost. It tracks operational inventory, shortage risk, and deliveries instead.`
+      );
+    }
+
+    if (resourceSummary.totalUnits > 0) {
+      lines.push(
+        `${resourceSummary.label} visibility: ${resourceSummary.totalUnits} units are visible across tracked warehouses${
+          resourceSummary.topWarehouses.length > 0
+            ? `, led by ${resourceSummary.topWarehouses.map((warehouse) => `${warehouse.name} (${warehouse.units})`).join(', ')}`
+            : ''
+        }.`
+      );
+    }
+
+    if (resourceSummary.lowStockSignals.length > 0) {
+      lines.push(
+        `Low-stock ${resourceTopic} signals: ${resourceSummary.lowStockSignals
+          .map((resource) => `${resource.name} at ${resource.location} (${resource.quantity} ${resource.unit})`)
+          .join(', ')}.`
+      );
+    }
+
+    if (resourceSummary.shortageSignals.length > 0) {
+      lines.push(
+        `${resourceSummary.label} shortage outlook: ${resourceSummary.shortageSignals
+          .map((item) => `${item.location} is ${item.riskLevel.toLowerCase()} risk with ${item.daysRemaining} days remaining`)
+          .join(', ')}.`
+      );
+    }
+
+    if (resourceSummary.shipmentSignals.length > 0) {
+      lines.push(
+        `${resourceSummary.label} shipments in motion: ${resourceSummary.shipmentSignals
+          .map((shipment) => `${shipment.shipmentId} to ${shipment.to} (${shipment.status}, ${formatMinutes(shipment.etaMinutes)})`)
+          .join(', ')}.`
+      );
+    }
+
+    if (
+      lines.length === 0 ||
+      query.includes('what is') ||
+      query.includes('status') ||
+      query.includes('situation') ||
+      query.includes('summary')
+    ) {
+      if (
+        resourceSummary.totalUnits === 0 &&
+        resourceSummary.lowStockSignals.length === 0 &&
+        resourceSummary.shortageSignals.length === 0 &&
+        resourceSummary.shipmentSignals.length === 0
+      ) {
+        lines.push(
+          `I do not have a direct ${resourceTopic} inventory signal in the current dataset, but I can still answer nearby logistics questions from incidents, shipments, and low-stock alerts.`
+        );
+      }
     }
   }
 
@@ -728,6 +1157,11 @@ const composeRuleBasedReply = ({ message, mode, page, context }) => {
   }
 
   if (lines.length === 0) {
+    if (mode === 'global' && topGlobalCard) {
+      lines.push(
+        `Global assistant mode is active. ${topGlobalCard.label} currently leads the watchlist at ${topGlobalCard.score}/100. Key signals: ${topGlobalCard.topSignals.slice(0, 3).join(', ')}. Prevention focus: ${topGlobalCard.preventionRecommendations[0] || 'maintain early warning'}. Response focus: ${topGlobalCard.responseActions[0] || 'maintain executive coordination'}.`
+      );
+    } else
     if (mode === 'citizen') {
       lines.push(
         `Citizen support is live. I can help with nearest shelters, safety guidance, SOS status, and emergency contacts. Right now there are ${context.activeIncidents} active incidents in the system.`
@@ -739,6 +1173,10 @@ const composeRuleBasedReply = ({ message, mode, page, context }) => {
     } else if (mode === 'analytics') {
       lines.push(
         `Analytics mode is active. Today has ${context.todayIncidentCount} incidents against a ${context.lastWeekDailyAverage} daily baseline, with average response time at ${context.avgResponseTimeLabel}.`
+      );
+    } else if (page === 'global' && topGlobalCard) {
+      lines.push(
+        `Global crisis mode is active. ${topGlobalCard.label} currently carries the highest score at ${topGlobalCard.score}/100, and ReliefOS is tracking ${globalCards.length} cross-sector crisis lanes.`
       );
     } else {
       lines.push(
@@ -755,57 +1193,78 @@ const composeRuleBasedReply = ({ message, mode, page, context }) => {
     lines.push('You are on the Analytics page, so incident trend and KPI interpretation are prioritized.');
   } else if (page === 'dashboard') {
     lines.push('You are on the Dashboard, so live incident severity and operational pressure are in focus.');
+  } else if (page === 'global') {
+    lines.push('You are on the Global Crisis page, so cross-sector executive risk and prevention priorities are in focus.');
   }
 
   return { reply: lines.join(' '), actions };
 };
 
-const maybeGenerateAIReply = async ({ message, mode, page, context, actionCandidates }) => {
+const maybeGenerateAIReply = async ({ messages, mode, page, context, actionCandidates }) => {
   if (!ai) {
     return null;
   }
 
-  const response = await ai.models.generateContent({
-    model: AI_MODEL,
-    contents: [
+  const recentMessages = Array.isArray(messages) ? messages.slice(-20) : [];
+  const contents = recentMessages.map((item) => ({
+    role: item.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: String(item.text || '') }],
+  }));
+
+  contents.unshift({
+    role: 'user',
+    parts: [
       {
-        role: 'user',
-        parts: [
-          {
-            text: [
-              `Mode: ${mode}`,
-              `Page: ${page}`,
-              `User message: ${message}`,
-              `Context JSON: ${JSON.stringify(context)}`,
-              `Available actions JSON: ${JSON.stringify(actionCandidates)}`,
-              'Respond as ReliefOS Operations Copilot. Prefer grounded, concise operational language. Keep actions only if truly relevant.',
-            ].join('\n'),
-          },
-        ],
+        text: [
+          `Mode: ${mode}`,
+          `Page: ${page}`,
+          `Live operational context JSON: ${JSON.stringify(buildAssistantContextDigest(context))}`,
+          `Allowed assistant actions JSON: ${JSON.stringify(actionCandidates)}`,
+        ].join('\n'),
       },
     ],
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          reply: { type: Type.STRING },
-          actions: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                type: { type: Type.STRING },
-                label: { type: Type.STRING },
+  });
+
+  const response = await generateAssistantContentWithRetry(
+    {
+      contents,
+      config: {
+        systemInstruction: [
+          'You are ReliefOS Operations Copilot, a capable general AI assistant inside a disaster response platform.',
+          mode === 'general'
+            ? 'General mode is active. Default to a broad ChatGPT-style assistant behavior, and only bring in live operational context when the user asks about ReliefOS, emergencies, logistics, analytics, shelters, incidents, or resources.'
+            : `The active copilot mode is ${mode}. Prioritize answers that fit that operational mode while still answering naturally.`,
+          'Answer any user question naturally, not just predefined prompts.',
+          'When the question is about ReliefOS operations, incidents, logistics, analytics, shelters, or resources, ground the answer in the provided live context and recent chat history.',
+          'When the question is broader or outside the tracked ReliefOS data, answer it with normal general knowledge and clearly distinguish that from live platform data.',
+          'If the user asks for a metric the system does not track, say that clearly. If helpful, then add the nearest operational signal you do have.',
+          'Be concise, useful, and specific. Do not invent database fields, prices, incidents, or measurements that are not available.',
+          'Only return actions that exactly match the provided allowed assistant actions.',
+        ].join(' '),
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            reply: { type: Type.STRING },
+            actions: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  type: { type: Type.STRING },
+                  label: { type: Type.STRING },
+                },
+                required: ['type', 'label'],
               },
-              required: ['type', 'label'],
             },
           },
+          required: ['reply'],
         },
-        required: ['reply'],
       },
     },
-  });
+    'Operations Copilot chat generation',
+    { maxRetries: 2, timeoutMs: 12000 }
+  );
 
   if (!response.text) {
     return null;
@@ -823,7 +1282,73 @@ const maybeGenerateAIReply = async ({ message, mode, page, context, actionCandid
   };
 };
 
+const maybeGenerateGeneralChatReply = async ({ messages }) => {
+  if (!ai) {
+    return null;
+  }
+
+  const recentMessages = Array.isArray(messages) ? messages.slice(-24) : [];
+  const contents = recentMessages.map((item) => ({
+    role: item.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: String(item.text || '') }],
+  }));
+
+  const response = await generateAssistantContentWithRetry(
+    {
+      contents,
+      config: {
+        systemInstruction: [
+          'You are ReliefOS AI in General mode.',
+          'Behave like a normal, helpful ChatGPT-style assistant.',
+          'Answer the user directly from Gemini using the conversation history.',
+          'Do not force operational summaries, crisis briefings, or predefined templates unless the user explicitly asks for ReliefOS operations, incidents, logistics, shelters, analytics, or resources.',
+          'Be natural, conversational, and useful.',
+        ].join(' '),
+      },
+    },
+    'General mode Gemini chat generation',
+    { maxRetries: 2, timeoutMs: 12000 }
+  );
+
+  if (!response.text) {
+    return null;
+  }
+
+  return {
+    reply: String(response.text).trim(),
+    actions: [],
+  };
+};
+
 const loadOperationalContext = async ({ page, mode, lat, lng }) => {
+  if (page === 'assistant' && mode === 'general') {
+    return {
+      ...GENERAL_MODE_CONTEXT,
+      page: 'assistant',
+      mode: 'general',
+      generatedAt: new Date().toISOString(),
+      aiBriefing: {
+        headline: 'General AI mode active',
+        summary: 'Gemini direct chat is active on this page.',
+        topPriorityReason: 'Operational overlays are disabled unless you move to an operations page.',
+        shortageHeadline: 'No operational shortage summary in general mode.',
+        dispatchHeadline: 'No dispatch recommendation in general mode.',
+      },
+      suggestedPrompts: [
+        'Hi',
+        'Explain climate change simply.',
+        'Help me write a short email.',
+        'Summarize today in 5 bullet points.',
+        'What is the difference between AI and ML?',
+        'How should I learn JavaScript?',
+      ],
+    };
+  }
+
+  if (page === 'global' || mode === 'global') {
+    return buildGlobalAssistantContext({ page: 'global', mode: 'global' });
+  }
+
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * DAY_MS);
   const fourteenDaysAgo = new Date(now.getTime() - 14 * DAY_MS);
@@ -923,7 +1448,7 @@ const loadOperationalContext = async ({ page, mode, lat, lng }) => {
     suggestedPrompts: buildSuggestedPrompts(page, mode),
   };
 
-  return {
+  const baseContext = {
     ...context,
     prioritizedIncidents,
     shortagePredictions,
@@ -935,6 +1460,21 @@ const loadOperationalContext = async ({ page, mode, lat, lng }) => {
       context,
     }),
   };
+
+  if (page === 'assistant') {
+    try {
+      const globalOverview = await buildGlobalOverview();
+      return {
+        ...baseContext,
+        globalOverview,
+        suggestedPrompts: buildSuggestedPrompts('global', 'global'),
+      };
+    } catch (error) {
+      console.warn('Assistant global overview fallback engaged:', error.message);
+    }
+  }
+
+  return baseContext;
 };
 
 const readHistory = async ({ sessionId, role, page, mode, userId = null }) => {
@@ -951,7 +1491,7 @@ const writeHistory = async ({ chat, role, page, mode, userId = null, messages })
   chat.page = page;
   chat.mode = mode;
   chat.userId = userId || chat.userId || null;
-  chat.messages = messages.slice(-24);
+  chat.messages = messages.slice(-40);
   await chat.save();
   return chat;
 };
@@ -998,30 +1538,57 @@ const chat = async (req, res) => {
 
     const chatDoc = await readHistory({ sessionId, role, page, mode, userId: req.user?._id || null });
     const context = await loadOperationalContext({ page, mode, lat, lng });
-    const fallback = composeRuleBasedReply({
-      message: latestUserMessage.text,
-      mode,
-      page,
-      context,
-    });
+    const isPureGeneralChat = page === 'assistant' && mode === 'general';
+    let result;
 
-    let result = fallback;
-    try {
-      const aiResult = await maybeGenerateAIReply({
+    if (isPureGeneralChat) {
+      try {
+        const aiResult = await maybeGenerateGeneralChatReply({
+          messages: incomingMessages,
+        });
+
+        if (aiResult?.reply) {
+          result = aiResult;
+        } else {
+          result = {
+            reply: 'I could not generate a Gemini response right now. Please try again.',
+            actions: [],
+          };
+        }
+      } catch (error) {
+        console.warn('General Gemini chat fallback engaged:', error.message);
+        result = {
+          reply:
+            'Gemini chat is temporarily unavailable right now. Please try again in a moment.',
+          actions: [],
+        };
+      }
+    } else {
+      const fallback = composeRuleBasedReply({
         message: latestUserMessage.text,
         mode,
         page,
         context,
-        actionCandidates: fallback.actions,
       });
-      if (aiResult?.reply) {
-        result = {
-          reply: aiResult.reply,
-          actions: Array.isArray(aiResult.actions) ? aiResult.actions : fallback.actions,
-        };
+
+      result = fallback;
+      try {
+        const aiResult = await maybeGenerateAIReply({
+          messages: incomingMessages,
+          mode,
+          page,
+          context,
+          actionCandidates: fallback.actions,
+        });
+        if (aiResult?.reply) {
+          result = {
+            reply: aiResult.reply,
+            actions: Array.isArray(aiResult.actions) ? aiResult.actions : fallback.actions,
+          };
+        }
+      } catch (error) {
+        console.warn('Assistant AI fallback engaged:', error.message);
       }
-    } catch (error) {
-      console.warn('Assistant AI fallback engaged:', error.message);
     }
 
     const persistedMessages = [

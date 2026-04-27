@@ -2,16 +2,18 @@
  * ReliefOS AI - Main Server Entry Point
  */
 
-require('dotenv').config();
+const { loadEnv } = require('./config/env');
+loadEnv();
 const http = require('http');
 const { Server } = require('socket.io');
-const { app, ensureBackendReady, allowedOrigins } = require('./app');
+const { app, ensureBackendReady, corsOptions } = require('./app');
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: corsOptions.origin,
     methods: ['GET', 'POST'],
+    credentials: true,
   },
 });
 

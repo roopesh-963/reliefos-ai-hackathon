@@ -29,6 +29,22 @@ Prerequisites:
 
 Frontend runs on `http://localhost:3000` and backend on `http://localhost:5000`.
 
+## Deploy On Vercel
+
+For the deployed auth flow to work, add these server-side environment variables in your Vercel project settings:
+- `MONGO_URI`
+- `JWT_SECRET`
+- `CLIENT_URL`
+
+Recommended values:
+- `MONGO_URI`: your MongoDB Atlas connection string
+- `JWT_SECRET`: a long random secret used to sign auth tokens
+- `CLIENT_URL`: your production site URL, for example `https://your-project.vercel.app`
+
+Optional frontend env:
+- `VITE_API_URL`
+  Leave this unset when the frontend and API are deployed in the same Vercel project. The app will call `/api` on the current origin automatically.
+
 ## API Keys For Real Data
 
 Add these in `backend/.env`:
@@ -52,4 +68,3 @@ Returns source readiness:
 - `geocodingEnabled`
 - `usgsFeedUrl`
 - `mode` (`live` or `partial`)
-

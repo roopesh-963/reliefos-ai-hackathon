@@ -10,3 +10,4 @@ export * from './supply';
 export * from './assistant';
 export * from './intel';
 export * from './ai';
+export * from './globalIntel';

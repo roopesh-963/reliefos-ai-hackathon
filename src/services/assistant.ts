@@ -1,4 +1,5 @@
 import api from './http';
+import type { GlobalCrisisOverview } from './globalIntel';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -130,6 +131,7 @@ export interface AssistantContextSnapshot {
   rescueTeams: number;
   currentLocation: { lat: number; lng: number };
   suggestedPrompts: string[];
+  globalOverview?: GlobalCrisisOverview;
 }
 
 export interface AssistantContextResponse {
@@ -184,6 +186,7 @@ export const defaultAssistantContext: AssistantContextSnapshot = {
   rescueTeams: 0,
   currentLocation: { lat: 20.5937, lng: 78.9629 },
   suggestedPrompts: [],
+  globalOverview: undefined,
 };
 
 export const normalizeAssistantContext = (input: Partial<AssistantContextSnapshot> | null | undefined): AssistantContextSnapshot => {
@@ -212,6 +215,7 @@ export const normalizeAssistantContext = (input: Partial<AssistantContextSnapsho
     nearestShelters: Array.isArray(source.nearestShelters) ? source.nearestShelters : [],
     currentLocation: source.currentLocation || defaultAssistantContext.currentLocation,
     suggestedPrompts: Array.isArray(source.suggestedPrompts) ? source.suggestedPrompts : [],
+    globalOverview: source.globalOverview,
   };
 };
 

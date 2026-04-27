@@ -20,6 +20,10 @@ export interface ProfileUpdateResponse {
   user: AuthUser;
 }
 
+export interface ForgotPasswordResponse {
+  message: string;
+}
+
 const normalizeAuthUser = (input: any): AuthUser | null => {
   if (!input || typeof input !== 'object') {
     return null;
@@ -81,6 +85,14 @@ export const login = async (email: string, password: string): Promise<AuthRespon
   const user = persistAuthUser(data.user) || data.user;
   notifyAuthChanged();
   return { ...data, user };
+};
+
+export const forgotPassword = async (
+  email: string,
+  newPassword: string
+): Promise<ForgotPasswordResponse> => {
+  const { data } = await api.post('/auth/forgot-password', { email, newPassword });
+  return data;
 };
 
 export const getMe = async (): Promise<AuthUser> => {

@@ -17,6 +17,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { BrandLogo } from '../components/BrandLogo';
 import { BackToDashboardButton } from '../components/navigation/BackToDashboardButton';
 import { cn } from '../lib/utils';
 import { getCurrentLocation, submitSOS } from '../services/api';
@@ -358,11 +359,8 @@ export default function SOSApp() {
       >
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-cyan-200">
-              <Shield className="w-5 h-5 text-cyan-200" />
-            </div>
             <div>
-              <div className="text-white font-bold tracking-tight">ReliefOS AI</div>
+              <BrandLogo className="h-10 w-auto sm:h-11" />
               <div className="relief-kicker text-[10px] uppercase tracking-[0.25em] font-mono">Citizen Emergency Node</div>
             </div>
           </div>
@@ -474,11 +472,12 @@ export default function SOSApp() {
                   type="button"
                   whileTap={{ scale: 0.96 }}
                   onClick={() => setCategory(item.id)}
+                  aria-pressed={category === item.id}
                   className={cn(
-                    'px-3 py-3 text-left transition-all',
+                    'relative rounded-2xl border px-3 py-3 text-left transition-all',
                     category === item.id
-                      ? 'text-cyan-50'
-                      : 'text-white hover:bg-white/[0.03]'
+                      ? 'border-cyan-300/28 bg-cyan-500/12 text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]'
+                      : 'border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.06]'
                   )}
                 >
                   <div
@@ -491,6 +490,9 @@ export default function SOSApp() {
                     <item.icon className="w-4 h-4" />
                   </div>
                   <div className="text-sm text-white font-semibold">{item.id}</div>
+                  <div className="mt-1 text-[11px] text-white/48">
+                    {category === item.id ? 'Selected' : 'Tap to select'}
+                  </div>
                 </motion.button>
               ))}
             </div>
@@ -510,13 +512,14 @@ export default function SOSApp() {
                     key={value}
                     type="button"
                     onClick={() => setSeverity(value)}
+                    aria-pressed={severity === value}
                     className={cn(
-                      'py-2.5 text-sm font-semibold capitalize transition-all',
+                      'rounded-2xl border py-2.5 text-sm font-semibold capitalize transition-all',
                       severity === value
                         ? value === 'critical'
-                          ? 'text-red-100 shadow-[0_0_20px_rgba(239,68,68,0.25)]'
-                          : 'text-cyan-100'
-                        : 'text-gray-300'
+                          ? 'border-red-400/30 bg-red-500/12 text-red-100 shadow-[0_0_20px_rgba(239,68,68,0.25)]'
+                          : 'border-cyan-300/24 bg-cyan-500/12 text-cyan-100'
+                        : 'border-white/10 bg-white/[0.03] text-gray-300 hover:bg-white/[0.06]'
                     )}
                   >
                     {value}

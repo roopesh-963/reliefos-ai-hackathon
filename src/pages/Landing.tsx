@@ -21,6 +21,7 @@ import {
   Mail,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { BrandLogo } from '../components/BrandLogo';
 import { useAuth } from '../hooks/useAuth';
 
 type AuthMode = 'signin' | 'signup' | null;
@@ -121,7 +122,84 @@ const capabilityItems = [
   },
 ] as const;
 
-function Navbar({ onAuthClick }: { onAuthClick: (mode: AuthMode) => void }) {
+const accessProfiles = [
+  {
+    label: 'Citizen',
+    icon: Users,
+    description: 'For public users who need crisis visibility, alerts, and emergency support access.',
+    pages: ['Dashboard', 'Crisis Map', 'SOS Citizen App', 'Global Crisis', 'Profile', 'Notifications'],
+  },
+  {
+    label: 'Operator',
+    icon: Truck,
+    description: 'Mapped to the rescue_team role for field teams managing operations, logistics, and response execution.',
+    pages: ['Dashboard', 'Crisis Map', 'Resources', 'Analytics', 'Supply Chain', 'AI Assistant', 'Global Crisis', 'Profile', 'Notifications', 'SOS Citizen App'],
+  },
+  {
+    label: 'Admin',
+    icon: Shield,
+    description: 'For command users who need full platform visibility across intelligence, supply, analytics, and AI coordination.',
+    pages: ['Dashboard', 'Crisis Map', 'Resources', 'Analytics', 'Supply Chain', 'AI Assistant', 'Global Crisis', 'Profile', 'Notifications', 'SOS Citizen App'],
+  },
+] as const;
+
+const projectHighlights = [
+  'Natural disaster monitoring with live crisis map and seismic intelligence',
+  'Universal crisis intelligence for financial, war/conflict, food, health, and energy-water risks',
+  'AI copilots for summaries, recommendations, and response planning',
+  'Supply chain and warehouse visibility for real logistics coordination',
+] as const;
+
+const faqItems = [
+  {
+    question: 'What is ReliefOS AI?',
+    answer:
+      'ReliefOS AI is a universal crisis intelligence platform that combines live crisis monitoring, AI summaries, citizen support tools, logistics tracking, and operational dashboards in one system.',
+  },
+  {
+    question: 'Which crisis types does the platform monitor?',
+    answer:
+      'The platform covers natural disasters, financial crises, war and conflict, food shortages, health outbreaks, and energy or water disruption, while also keeping the original disaster-response modules active.',
+  },
+  {
+    question: 'Who can use ReliefOS AI?',
+    answer:
+      'The platform supports citizen users, operator teams, and admin users. Operator access is powered by the rescue_team role in this project.',
+  },
+  {
+    question: 'What pages can a citizen access?',
+    answer:
+      'Citizen users can access the Dashboard, Crisis Map, SOS Citizen App, Global Crisis, Profile, and Notifications pages.',
+  },
+  {
+    question: 'What pages can an operator access?',
+    answer:
+      'Operators can access Dashboard, Crisis Map, Resources, Analytics, Supply Chain, AI Assistant, Global Crisis, Profile, Notifications, and SOS Citizen App.',
+  },
+  {
+    question: 'What pages can an admin access?',
+    answer:
+      'Admin users have full platform visibility across Dashboard, Crisis Map, Resources, Analytics, Supply Chain, AI Assistant, Global Crisis, Profile, Notifications, and SOS Citizen App.',
+  },
+  {
+    question: 'Does ReliefOS AI use real data?',
+    answer:
+      'Yes. The platform is designed to pull live operational and public intelligence data for crisis feeds, logistics, analytics, and AI-assisted decision support.',
+  },
+  {
+    question: 'How can I contact the project team?',
+    answer:
+      'You can reach the team through the Contact Us section on the landing page at roopeshg91488@gmail.com and pawanshimha.pc@gmail.com.',
+  },
+] as const;
+
+function Navbar({
+  onAuthClick,
+  isLoggedIn,
+}: {
+  onAuthClick: (mode: AuthMode) => void;
+  isLoggedIn: boolean;
+}) {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -146,12 +224,9 @@ function Navbar({ onAuthClick }: { onAuthClick: (mode: AuthMode) => void }) {
         <button
           type="button"
           onClick={() => navigate('/')}
-          className="group flex cursor-pointer items-center gap-2"
+          className="group flex cursor-pointer items-center"
         >
-          <div className="flex h-8 w-8 rotate-45 items-center justify-center rounded-sm bg-[var(--color-relief-red)] transition-transform duration-500 group-hover:rotate-90">
-            <Shield className="h-5 w-5 -rotate-45 text-white transition-transform duration-500 group-hover:-rotate-90" />
-          </div>
-          <span className="text-xl font-semibold uppercase tracking-tight">ReliefOS AI</span>
+          <BrandLogo className="h-10 w-auto transition-opacity duration-300 group-hover:opacity-90 sm:h-12" />
         </button>
 
         <div className="hidden items-center gap-8 text-sm font-medium text-white/60 md:flex">
@@ -170,20 +245,32 @@ function Navbar({ onAuthClick }: { onAuthClick: (mode: AuthMode) => void }) {
         </div>
 
         <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => onAuthClick('signin')}
-            className="hidden text-sm font-medium text-white/80 transition-colors hover:text-white sm:block"
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            onClick={() => onAuthClick('signup')}
-            className="hidden rounded-full bg-white px-5 py-2 text-sm font-semibold text-black transition-colors hover:bg-white/90 sm:block"
-          >
-            Get Started
-          </button>
+          {isLoggedIn ? (
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              className="hidden rounded-full bg-white px-5 py-2 text-sm font-semibold text-black transition-colors hover:bg-white/90 sm:block"
+            >
+              Open Dashboard
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => onAuthClick('signin')}
+                className="hidden text-sm font-medium text-white/80 transition-colors hover:text-white sm:block"
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => onAuthClick('signup')}
+                className="hidden rounded-full bg-white px-5 py-2 text-sm font-semibold text-black transition-colors hover:bg-white/90 sm:block"
+              >
+                Get Started
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={() => setMobileMenuOpen((current) => !current)}
@@ -237,26 +324,41 @@ function Navbar({ onAuthClick }: { onAuthClick: (mode: AuthMode) => void }) {
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  closeMobileMenu();
-                  onAuthClick('signin');
-                }}
-                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-white/8"
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  closeMobileMenu();
-                  onAuthClick('signup');
-                }}
-                className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-white/90"
-              >
-                Get Started
-              </button>
+              {isLoggedIn ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeMobileMenu();
+                    navigate('/dashboard');
+                  }}
+                  className="col-span-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-white/90"
+                >
+                  Open Dashboard
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeMobileMenu();
+                      onAuthClick('signin');
+                    }}
+                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-white/8"
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeMobileMenu();
+                      onAuthClick('signup');
+                    }}
+                    className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-white/90"
+                  >
+                    Get Started
+                  </button>
+                </>
+              )}
             </div>
           </motion.div>
         )}
@@ -273,10 +375,13 @@ function AuthModal({
   onClose: () => void;
 }) {
   const navigate = useNavigate();
-  const { loading, error, doLogin, doRegister } = useAuth();
+  const { loading, error, doLogin, doRegister, doForgotPassword } = useAuth();
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState<string | null>(null);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [signInForm, setSignInForm] = useState({ email: '', password: '' });
+  const [forgotPasswordForm, setForgotPasswordForm] = useState({ email: '', newPassword: '' });
   const [signUpForm, setSignUpForm] = useState({
     name: '',
     email: '',
@@ -287,6 +392,8 @@ function AuthModal({
   useEffect(() => {
     setFormError(null);
     setFocusedInput(null);
+    setForgotPasswordSuccess(null);
+    setShowForgotPassword(false);
   }, [mode]);
 
   const handleSignIn = async (event: FormEvent) => {
@@ -312,6 +419,28 @@ function AuthModal({
       navigate('/dashboard');
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Registration failed');
+    }
+  };
+
+  const handleForgotPassword = async (event: FormEvent) => {
+    event.preventDefault();
+    setFormError(null);
+    setForgotPasswordSuccess(null);
+
+    try {
+      const response = await doForgotPassword(
+        forgotPasswordForm.email,
+        forgotPasswordForm.newPassword
+      );
+      setForgotPasswordSuccess(response.message);
+      setShowForgotPassword(false);
+      setSignInForm((current) => ({
+        ...current,
+        email: forgotPasswordForm.email,
+        password: '',
+      }));
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Password reset failed');
     }
   };
 
@@ -374,8 +503,14 @@ function AuthModal({
               </div>
             )}
 
+            {forgotPasswordSuccess && (
+              <div className="mb-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+                {forgotPasswordSuccess}
+              </div>
+            )}
+
             {mode === 'signin' ? (
-              <form onSubmit={handleSignIn} className="space-y-4">
+              <form onSubmit={showForgotPassword ? handleForgotPassword : handleSignIn} className="space-y-4">
                 <motion.div variants={modalItemVariants} className="space-y-2">
                   <label className="px-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/30">
                     Email Address
@@ -402,9 +537,11 @@ function AuthModal({
                       onBlur={() => setFocusedInput(null)}
                       type="email"
                       required
-                      value={signInForm.email}
+                      value={showForgotPassword ? forgotPasswordForm.email : signInForm.email}
                       onChange={(event) =>
-                        setSignInForm((current) => ({ ...current, email: event.target.value }))
+                        showForgotPassword
+                          ? setForgotPasswordForm((current) => ({ ...current, email: event.target.value }))
+                          : setSignInForm((current) => ({ ...current, email: event.target.value }))
                       }
                       placeholder="name@organization.gov"
                       className="w-full rounded-2xl border border-white/10 bg-white/5 py-4 pl-12 pr-4 text-sm text-white placeholder:text-white/35 transition-all focus:border-[var(--color-relief-red)]/50 focus:bg-white/[0.08] focus:outline-none"
@@ -414,7 +551,7 @@ function AuthModal({
 
                 <motion.div variants={modalItemVariants} className="space-y-2">
                   <label className="px-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/30">
-                    Password
+                    {showForgotPassword ? 'New Password' : 'Password'}
                   </label>
                   <div
                     className={`group relative transition-all duration-300 ${
@@ -438,14 +575,34 @@ function AuthModal({
                       onBlur={() => setFocusedInput(null)}
                       type="password"
                       required
-                      value={signInForm.password}
+                      minLength={6}
+                      value={showForgotPassword ? forgotPasswordForm.newPassword : signInForm.password}
                       onChange={(event) =>
-                        setSignInForm((current) => ({ ...current, password: event.target.value }))
+                        showForgotPassword
+                          ? setForgotPasswordForm((current) => ({ ...current, newPassword: event.target.value }))
+                          : setSignInForm((current) => ({ ...current, password: event.target.value }))
                       }
                       placeholder="••••••••"
                       className="w-full rounded-2xl border border-white/10 bg-white/5 py-4 pl-12 pr-4 text-sm text-white placeholder:text-white/35 transition-all focus:border-[var(--color-relief-red)]/50 focus:bg-white/[0.08] focus:outline-none"
                     />
                   </div>
+                </motion.div>
+
+                <motion.div variants={modalItemVariants} className="flex items-center justify-between gap-3 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormError(null);
+                      setForgotPasswordSuccess(null);
+                      setShowForgotPassword((current) => !current);
+                    }}
+                    className="text-white/55 transition-colors hover:text-white"
+                  >
+                    {showForgotPassword ? 'Back to sign in' : 'Forgot password?'}
+                  </button>
+                  {showForgotPassword ? (
+                    <span className="text-right text-white/36">Enter your email and set a new password.</span>
+                  ) : null}
                 </motion.div>
 
                 <motion.button
@@ -456,7 +613,13 @@ function AuthModal({
                   disabled={loading}
                   className="group mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--color-relief-red)] py-4 font-bold text-white shadow-xl shadow-[var(--color-relief-red)]/20 transition-all hover:bg-[var(--color-relief-red)]/90 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {loading ? 'Accessing...' : 'Access Mission Control'}
+                  {loading
+                    ? showForgotPassword
+                      ? 'Resetting...'
+                      : 'Accessing...'
+                    : showForgotPassword
+                      ? 'Reset Password'
+                      : 'Access Mission Control'}
                   <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </motion.button>
               </form>
@@ -553,7 +716,7 @@ function AuthModal({
 
 export default function Landing() {
   const navigate = useNavigate();
-  const { isLoggedIn, doLogout } = useAuth();
+  const { isLoggedIn } = useAuth();
   const [authMode, setAuthMode] = useState<AuthMode>(null);
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
   const [activeCapability, setActiveCapability] = useState<string>(capabilityItems[0].title);
@@ -571,7 +734,7 @@ export default function Landing() {
 
   return (
     <div className="noise min-h-screen overflow-x-hidden selection:bg-[var(--color-relief-red)]/30 focus-within:outline-none">
-      <Navbar onAuthClick={setAuthMode} />
+      <Navbar onAuthClick={setAuthMode} isLoggedIn={isLoggedIn} />
 
       <AnimatePresence>
         {authMode && <AuthModal mode={authMode} onClose={() => setAuthMode(null)} />}
@@ -677,7 +840,7 @@ export default function Landing() {
                 variants={fadeUpVariants}
                 className="mx-auto max-w-2xl text-base leading-7 text-white/50 font-light sm:text-lg md:text-xl"
               >
-                Crisis intelligence, resource coordination, and emergency response in one platform.
+                ReliefOS AI is a universal crisis intelligence platform for disaster monitoring, emergency coordination, global risk awareness, and logistics operations.
               </motion.p>
 
               <motion.div
@@ -761,6 +924,38 @@ export default function Landing() {
           </span>
           <div className="h-12 w-[1px] bg-gradient-to-b from-white/20 to-transparent" />
         </motion.div>
+      </section>
+
+      <section id="platform" className="relative overflow-hidden px-4 py-20 sm:px-6 sm:py-28">
+        <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+          <div className="rounded-[2rem] border border-white/8 bg-white/[0.04] p-6 sm:p-8">
+            <div className="text-[10px] font-bold uppercase tracking-[0.36em] text-[var(--color-relief-orange)]">
+              About The Project
+            </div>
+            <h2 className="mt-4 font-serif text-3xl font-bold text-white sm:text-4xl md:text-5xl">
+              One platform for local emergencies and global crisis intelligence.
+            </h2>
+            <p className="mt-5 max-w-3xl text-base leading-8 text-white/56">
+              ReliefOS AI brings together citizen safety tools, command dashboards, global crisis feeds, AI summaries, crisis mapping, logistics tracking, and response planning in a single operational surface. It is built to support both community-level incidents and multi-domain crises such as natural disasters, financial shocks, conflict escalation, food stress, health outbreaks, and energy or water disruption.
+            </p>
+          </div>
+
+          <div className="rounded-[2rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,rgba(255,255,255,0.03)_100%)] p-6 sm:p-8">
+            <div className="text-[10px] font-bold uppercase tracking-[0.36em] text-white/34">
+              What It Covers
+            </div>
+            <div className="mt-5 space-y-3">
+              {projectHighlights.map((item) => (
+                <div
+                  key={item}
+                  className="rounded-2xl border border-white/8 bg-black/10 px-4 py-3 text-sm leading-7 text-white/68"
+                >
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
 
       <section id="capabilities" className="relative overflow-hidden bg-white/2 px-4 py-20 sm:px-6 sm:py-32">
@@ -853,6 +1048,52 @@ export default function Landing() {
         </div>
       </section>
 
+      <section className="relative overflow-hidden bg-white/[0.02] px-4 py-20 sm:px-6 sm:py-28">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-12 text-center">
+            <div className="text-[10px] font-bold uppercase tracking-[0.36em] text-[var(--color-relief-orange)]">
+              Access By Role
+            </div>
+            <h2 className="mt-4 font-serif text-3xl font-bold sm:text-4xl md:text-5xl">
+              Who can access which pages.
+            </h2>
+            <p className="mx-auto mt-4 max-w-3xl text-base leading-8 text-white/50">
+              Access is role-based. In this project, the operator experience is powered by the <span className="text-white/72">rescue_team</span> role.
+            </p>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-3">
+            {accessProfiles.map((profile) => (
+              <div
+                key={profile.label}
+                className="rounded-[2rem] border border-white/8 bg-white/[0.04] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.18)]"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+                    <profile.icon className="h-5 w-5 text-[var(--color-relief-orange)]" />
+                  </div>
+                  <div className="text-xl font-semibold text-white">{profile.label}</div>
+                </div>
+                <p className="mt-4 text-sm leading-7 text-white/54">{profile.description}</p>
+                <div className="mt-5 text-[10px] font-bold uppercase tracking-[0.28em] text-white/32">
+                  Accessible Pages
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {profile.pages.map((page) => (
+                    <div
+                      key={`${profile.label}-${page}`}
+                      className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/70"
+                    >
+                      {page}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section id="intelligence" className="relative overflow-hidden px-4 py-24 sm:px-6 sm:py-40">
         <div className="absolute inset-0 z-0">
           <div className="absolute left-1/2 top-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full bg-[var(--color-relief-red)]/30 opacity-40 blur-[150px]" />
@@ -908,28 +1149,48 @@ export default function Landing() {
         </div>
       </section>
 
+      <section className="relative overflow-hidden bg-white/[0.02] px-4 py-20 sm:px-6 sm:py-28">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-12 text-center">
+            <div className="text-[10px] font-bold uppercase tracking-[0.36em] text-[var(--color-relief-orange)]">
+              FAQ
+            </div>
+            <h2 className="mt-4 font-serif text-3xl font-bold sm:text-4xl md:text-5xl">
+              Frequently asked questions.
+            </h2>
+            <p className="mx-auto mt-4 max-w-3xl text-base leading-8 text-white/50">
+              Quick answers about the project, role access, and how the platform works.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {faqItems.map((item, index) => (
+              <motion.div
+                key={item.question}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: index * 0.04, ease: cinematicEase }}
+                className="rounded-[1.8rem] border border-white/8 bg-white/[0.04] p-6"
+              >
+                <div className="text-lg font-semibold text-white">{item.question}</div>
+                <div className="mt-3 text-sm leading-7 text-white/58">{item.answer}</div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <footer id="footer" className="border-t border-white/5 bg-black/20 px-4 py-16 sm:px-6 sm:py-20">
         <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-10 sm:gap-12 md:flex-row">
           <div className="space-y-6">
-            <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-[var(--color-relief-orange)]" />
-              <span className="text-lg font-bold uppercase tracking-tight">ReliefOS AI</span>
-            </div>
+            <BrandLogo className="h-12 w-auto sm:h-14" />
             <p className="max-w-xs text-sm text-white/30">
               Unified crisis intelligence layer. Built for the unknown.
             </p>
-            {isLoggedIn ? (
-              <button
-                type="button"
-                onClick={doLogout}
-                className="text-xs font-bold uppercase tracking-[0.2em] text-white/40 transition-colors hover:text-white"
-              >
-                Sign Out
-              </button>
-            ) : null}
           </div>
 
-          <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 sm:gap-24">
+          <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(0,1fr))_minmax(280px,1.2fr)] sm:gap-24">
             <div className="space-y-4">
               <h4 className="text-[10px] font-bold uppercase tracking-widest text-white/20">
                 Protocol
@@ -999,6 +1260,31 @@ export default function Landing() {
                   </a>
                 </li>
               </ul>
+            </div>
+            <div className="space-y-4">
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-white/20">
+                Contact Us
+              </h4>
+              <div className="space-y-3 text-sm text-white/56">
+                <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
+                  <div className="mb-2 inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-white/34">
+                    <Mail className="h-3.5 w-3.5" />
+                    Project Contact
+                  </div>
+                  <a href="mailto:roopeshg91488@gmail.com" className="block transition-colors hover:text-white">
+                    roopeshg91488@gmail.com
+                  </a>
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
+                  <div className="mb-2 inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-white/34">
+                    <Mail className="h-3.5 w-3.5" />
+                    Project Contact
+                  </div>
+                  <a href="mailto:pawanshimha.pc@gmail.com" className="block transition-colors hover:text-white">
+                    pawanshimha.pc@gmail.com
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -540,112 +540,116 @@ export default function SupplyChain() {
         ))}
       </section>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-        <div className="xl:col-span-8">
-          <SectionShell
-            title="Live Logistics Map"
-            subtitle="Convoys, depots, shelters, and route exceptions in real time"
-            actions={
-              <div className="bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.25em] text-gray-300">
-                {filteredShipments.length} visible lanes
-              </div>
-            }
-          >
-            <div className="h-[460px] overflow-hidden">
-              <TacticalMap center={mapCenter} zoom={4} markers={mapMarkers} routes={mapRoutes} showFaultLines={false} />
+      <div className="space-y-6">
+        <SectionShell
+          title="Live Logistics Map"
+          subtitle="Convoys, depots, shelters, and route exceptions in real time"
+          actions={
+            <div className="bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.25em] text-gray-300">
+              {filteredShipments.length} visible lanes
             </div>
-          </SectionShell>
-        </div>
+          }
+        >
+          <div className="h-[460px] overflow-hidden">
+            <TacticalMap center={mapCenter} zoom={4} markers={mapMarkers} routes={mapRoutes} showFaultLines={false} />
+          </div>
+        </SectionShell>
 
-        <div className="space-y-6 xl:col-span-4">
-          <SectionShell title="AI Optimization" subtitle="Explainable convoy guidance from incident and route pressure">
-            <div className="space-y-3">
-              {assistantContext ? (
-                <>
-                  <div className="bg-cyan-500/10 p-4 text-sm text-cyan-50">
-                    {assistantContext.aiBriefing.dispatchHeadline}
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+          <div className="xl:col-span-8">
+            <SectionShell
+              title="AI Optimization"
+              subtitle="Live shortage forecast and dispatch recommendations from the logistics backend"
+            >
+              <div className="space-y-3">
+                {assistantContext ? (
+                  <>
+                    <div className="bg-cyan-500/10 p-4 text-sm text-cyan-50">
+                      {assistantContext.aiBriefing.dispatchHeadline}
+                    </div>
+                    <ExplainableOperationsStack
+                      priorities={assistantContext.prioritizedIncidents}
+                      shortages={assistantContext.shortagePredictions}
+                      dispatches={assistantContext.dispatchRecommendations}
+                      className="xl:grid-cols-2"
+                    />
+                  </>
+                ) : analytics.insights.length === 0 ? (
+                  <div className="bg-white/5 p-4 text-sm text-gray-400">
+                    No optimization alerts are active right now.
                   </div>
-                  <ExplainableOperationsStack
-                    compact
-                    priorities={assistantContext.prioritizedIncidents}
-                    shortages={assistantContext.shortagePredictions}
-                    dispatches={assistantContext.dispatchRecommendations}
-                    className="xl:grid-cols-1"
-                  />
-                </>
-              ) : analytics.insights.length === 0 ? (
-                <div className="bg-white/5 p-4 text-sm text-gray-400">
-                  No optimization alerts are active right now.
-                </div>
-              ) : (
-                analytics.insights.map((insight) => (
-                  <div
-                    key={insight.id}
-                    className={cn(
-                      'p-4',
-                      insight.tone === 'critical'
-                        ? 'bg-red-500/10'
-                        : insight.tone === 'warning'
-                          ? 'bg-orange-500/10'
-                          : 'bg-cyan-500/10'
-                    )}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="bg-black/20 p-2">
-                        <Brain className="h-4 w-4 text-white" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-semibold text-white">{insight.title}</div>
-                        <div className="mt-1 text-sm text-gray-300">{insight.message}</div>
+                ) : (
+                  analytics.insights.map((insight) => (
+                    <div
+                      key={insight.id}
+                      className={cn(
+                        'p-4',
+                        insight.tone === 'critical'
+                          ? 'bg-red-500/10'
+                          : insight.tone === 'warning'
+                            ? 'bg-orange-500/10'
+                            : 'bg-cyan-500/10'
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="bg-black/20 p-2">
+                          <Brain className="h-4 w-4 text-white" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-white">{insight.title}</div>
+                          <div className="mt-1 text-sm text-gray-300">{insight.message}</div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </SectionShell>
+                  ))
+                )}
+              </div>
+            </SectionShell>
+          </div>
 
-          <SectionShell title="Flow Mix" subtitle="Current status and priority distribution">
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-              <div className="h-48 bg-black/20 p-3 backdrop-blur-md">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analytics.byStatus}>
-                    <Tooltip
-                      cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                      contentStyle={{
-                        backgroundColor: 'rgba(8,16,28,0.96)',
-                        border: '1px solid rgba(255,255,255,0.12)',
-                        borderRadius: '16px',
-                      }}
-                    />
-                    <Bar dataKey="value" radius={[10, 10, 0, 0]}>
-                      {analytics.byStatus.map((entry, index) => (
-                        <Cell key={entry.name} fill={STATUS_COLORS[index % STATUS_COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+          <div className="xl:col-span-4">
+            <SectionShell title="Flow Mix" subtitle="Current live status and priority distribution">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-1">
+                <div className="h-48 bg-black/20 p-3 backdrop-blur-md">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={analytics.byStatus}>
+                      <Tooltip
+                        cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                        contentStyle={{
+                          backgroundColor: 'rgba(8,16,28,0.96)',
+                          border: '1px solid rgba(255,255,255,0.12)',
+                          borderRadius: '16px',
+                        }}
+                      />
+                      <Bar dataKey="value" radius={[10, 10, 0, 0]}>
+                        {analytics.byStatus.map((entry, index) => (
+                          <Cell key={entry.name} fill={STATUS_COLORS[index % STATUS_COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="h-48 bg-black/20 p-3 backdrop-blur-md">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={analytics.byPriority} dataKey="value" nameKey="name" innerRadius={40} outerRadius={72}>
+                        {analytics.byPriority.map((entry, index) => (
+                          <Cell key={entry.name} fill={PRIORITY_COLORS[index % PRIORITY_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'rgba(8,16,28,0.96)',
+                          border: '1px solid rgba(255,255,255,0.12)',
+                          borderRadius: '16px',
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-              <div className="h-48 bg-black/20 p-3 backdrop-blur-md">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={analytics.byPriority} dataKey="value" nameKey="name" innerRadius={40} outerRadius={72}>
-                      {analytics.byPriority.map((entry, index) => (
-                        <Cell key={entry.name} fill={PRIORITY_COLORS[index % PRIORITY_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: 'rgba(8,16,28,0.96)',
-                        border: '1px solid rgba(255,255,255,0.12)',
-                        borderRadius: '16px',
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </SectionShell>
+            </SectionShell>
+          </div>
         </div>
       </div>
 
@@ -699,7 +703,7 @@ export default function SupplyChain() {
         }
       >
         <div className="relief-card overflow-hidden rounded-[1.5rem]">
-          <div className="overflow-x-auto">
+          <div className="max-h-[620px] overflow-auto">
             <table className="min-w-full divide-y divide-white/10 text-left">
               <thead className="bg-black/25">
                 <tr>

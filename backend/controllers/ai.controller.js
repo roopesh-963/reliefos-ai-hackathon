@@ -7,7 +7,7 @@
 
 const { GoogleGenAI, Type } = require('@google/genai');
 
-const AI_MODEL = process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
+const AI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 503]);
 const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_TIMEOUT_MS = 12000;

@@ -16,7 +16,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { login, register, logout, getCurrentUser, AuthUser, AUTH_SYNC_EVENT } from '../services/api';
+import { login, register, forgotPassword, logout, getCurrentUser, AuthUser, AUTH_SYNC_EVENT } from '../services/api';
 
 export const useAuth = () => {
   const [user, setUser] = useState<AuthUser | null>(getCurrentUser());
@@ -43,7 +43,11 @@ export const useAuth = () => {
       setUser(res.user);
       return res;
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Login failed';
+      const msg =
+        err.response?.data?.message ||
+        (err.request
+          ? 'Auth API unavailable. Check the deployed backend env vars and API route.'
+          : 'Login failed');
       setError(msg);
       throw new Error(msg);
     } finally {
@@ -61,7 +65,29 @@ export const useAuth = () => {
       setUser(res.user);
       return res;
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Registration failed';
+      const msg =
+        err.response?.data?.message ||
+        (err.request
+          ? 'Auth API unavailable. Check the deployed backend env vars and API route.'
+          : 'Registration failed');
+      setError(msg);
+      throw new Error(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const doForgotPassword = useCallback(async (email: string, newPassword: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await forgotPassword(email, newPassword);
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.message ||
+        (err.request
+          ? 'Auth API unavailable. Check the deployed backend env vars and API route.'
+          : 'Password reset failed');
       setError(msg);
       throw new Error(msg);
     } finally {
@@ -84,6 +110,7 @@ export const useAuth = () => {
     error,
     doLogin,
     doRegister,
+    doForgotPassword,
     doLogout,
   };
 };
